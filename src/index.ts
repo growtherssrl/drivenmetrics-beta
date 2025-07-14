@@ -40,7 +40,17 @@ if (!supabase) {
 
 // Express app
 const app = express();
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
+
 app.use(cookieParser());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 app.set('view engine', 'ejs');
 // Find the root directory (where package.json is)
 // In dev: src/index.ts -> go up one level
@@ -338,6 +348,9 @@ const transport = new StreamableHTTPServerTransport({
 // Connect server to transport
 mcpServer.connect(transport);
 
+// Define base URL for all routes
+const baseUrl = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? `https://drivenmetrics-mcp.onrender.com` : `http://localhost:${PORT}`);
+
 // Global CORS handler for OPTIONS requests
 app.options("*", (req, res) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -347,20 +360,7 @@ app.options("*", (req, res) => {
   res.status(200).end();
 });
 
-// Express routes
-app.get("/", (req, res) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.json({ 
-    service: "drivenmetrics-mcp",
-    status: "running",
-    endpoints: {
-      mcp: "/mcp-api",
-      health: "/health",
-      oauth_metadata: "/.well-known/oauth-protected-resource/mcp-api/sse"
-    }
-  });
-});
-
+// Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "drivenmetrics-mcp" });
 });
@@ -748,14 +748,6 @@ app.get("/login", (req, res) => {
   }
 });
 
-// Legacy endpoint redirects
-app.get("/mcp-api/sse", (req, res) => {
-  res.redirect("/mcp-api");
-});
-
-// Define base URL for all routes
-const baseUrl = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? `https://drivenmetrics-mcp.onrender.com` : `http://localhost:${PORT}`);
-
 // Home page
 app.get("/", (req, res) => {
   const sessionId = req.cookies?.session_id;
@@ -787,8 +779,15 @@ app.get("/", (req, res) => {
 
 // Dashboard page
 app.get("/dashboard", async (req, res) => {
+  console.log("[DASHBOARD] Request received");
+  console.log("[DASHBOARD] Cookies:", req.cookies);
+  
   const sessionId = req.cookies?.session_id;
+  console.log("[DASHBOARD] Session ID:", sessionId);
+  console.log("[DASHBOARD] Active sessions:", Array.from(sessions.keys()));
+  
   if (!sessionId || !sessions.has(sessionId)) {
+    console.log("[DASHBOARD] No valid session, redirecting to login");
     return res.redirect('/login');
   }
   
