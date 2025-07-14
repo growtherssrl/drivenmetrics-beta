@@ -1,6 +1,6 @@
 import express from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -23,6 +23,32 @@ const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPAB
 
 // Express app
 const app = express();
+app.use(express.json());
+
+// Global CORS handler for OPTIONS requests
+app.options("*", (req, res) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.status(200).end();
+});
+
+// MCP Server
+const mcpServer = new Server(
+  {
+    name: "drivenmetrics",
+    version: "1.0.0",
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
+
+// Store transports by session ID
+const transports: Record<string, SSEServerTransport> = {};
 
 // Database helpers
 async function getUserByToken(token: string): Promise<string | null> {
@@ -78,19 +104,6 @@ async function fetchAdsFromFacebook(params: any, fbToken: string): Promise<any> 
     return { error: error.response?.data?.error?.message || "Facebook API error" };
   }
 }
-
-// MCP Server
-const mcpServer = new Server(
-  {
-    name: "drivenmetrics",
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
 
 // MCP Handlers
 mcpServer.setRequestHandler(InitializeRequestSchema, async () => {
@@ -151,9 +164,9 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
 mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args } = request.params;
   
-  // Extract auth info from the request
-  const auth = (extra as any)?.request?.auth;
-  const userId = auth?.userId || null;
+  // Extract auth from the extra context
+  const authToken = (extra as any)?.auth?.token;
+  const userId = authToken ? await getUserByToken(authToken) : null;
   const fbToken = userId ? await getFacebookToken(userId) : null;
   
   try {
@@ -233,23 +246,6 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   }
 });
 
-// Create transport with session management
-const transport = new StreamableHTTPServerTransport({
-  sessionIdGenerator: () => Math.random().toString(36).substring(2, 15),
-});
-
-// Connect server to transport
-mcpServer.connect(transport);
-
-// Global CORS handler for OPTIONS requests
-app.options("*", (req, res) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.status(200).end();
-});
-
 // Express routes
 app.get("/", (req, res) => {
   res.header("Access-Control-Allow-Origin", "*");
@@ -257,7 +253,8 @@ app.get("/", (req, res) => {
     service: "drivenmetrics-mcp",
     status: "running",
     endpoints: {
-      mcp: "/mcp-api",
+      sse: "/mcp-api/sse",
+      messages: "/mcp-api/messages",
       health: "/health",
       oauth_metadata: "/.well-known/oauth-protected-resource/mcp-api/sse"
     }
@@ -295,32 +292,119 @@ app.get("/.well-known/oauth-authorization-server", (req, res) => {
   });
 });
 
-// Mount the MCP transport handler with authentication
-app.use("/mcp-api", express.json(), async (req, res, next) => {
+// SSE endpoint - Claude.ai expects /mcp-api/sse
+app.get("/mcp-api/sse", async (req, res) => {
+  console.log("📡 SSE connection request on /mcp-api/sse");
+  console.log("Headers:", req.headers);
+  
   // Extract auth token from headers
   const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.slice(7);
-    const userId = await getUserByToken(token);
-    if (userId) {
-      // Add auth info to request
-      (req as any).auth = { userId, token };
-    }
+  const authToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  
+  if (authToken) {
+    console.log("🔐 Auth token provided:", authToken.substring(0, 10) + "...");
   }
   
-  // Handle the MCP request
-  await transport.handleRequest(req, res, req.body);
+  try {
+    // Create SSE transport - it will handle setting headers
+    const transport = new SSEServerTransport("/mcp-api/messages", res);
+    
+    // Store the transport by session ID
+    const sessionId = transport.sessionId;
+    transports[sessionId] = transport;
+    
+    // Set up onclose handler to clean up transport when closed
+    transport.onclose = () => {
+      console.log(`📡 SSE transport closed for session ${sessionId}`);
+      delete transports[sessionId];
+    };
+    
+    // Store auth token in transport for later use
+    (transport as any).authToken = authToken;
+    
+    // Connect the transport to the MCP server
+    await mcpServer.connect(transport);
+    console.log(`✅ SSE connection established with session ID: ${sessionId}`);
+  } catch (error) {
+    console.error("❌ SSE connection error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to establish SSE connection" });
+    }
+  }
 });
 
-// Legacy endpoint redirects
-app.get("/mcp-api/sse", (req, res) => {
-  res.redirect("/mcp-api");
+// Legacy SSE endpoint redirect
+app.get("/sse", (req, res) => {
+  res.redirect("/mcp-api/sse");
+});
+
+// Messages endpoint - Claude.ai expects /mcp-api/messages
+app.post("/mcp-api/messages", async (req, res) => {
+  console.log("💬 Message received on /mcp-api/messages");
+  
+  // Extract session ID from query parameters
+  const sessionId = req.query.sessionId as string;
+  
+  if (!sessionId) {
+    console.error("No session ID provided in request URL");
+    return res.status(400).json({ error: "Missing sessionId parameter" });
+  }
+  
+  const transport = transports[sessionId];
+  if (!transport) {
+    console.error(`No active transport found for session ID: ${sessionId}`);
+    return res.status(404).json({ error: "Session not found" });
+  }
+  
+  try {
+    // Get the stored auth token from the transport
+    const authToken = (transport as any).authToken;
+    
+    // Add auth info to the request object for access in handlers
+    (req as any).auth = {
+      token: authToken,
+      timestamp: new Date().toISOString(),
+    };
+    
+    // Handle the POST message with the transport
+    await transport.handlePostMessage(req, res, req.body);
+  } catch (error) {
+    console.error("Error handling request:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Error handling request" });
+    }
+  }
+});
+
+// Legacy messages endpoint redirect
+app.post("/messages", (req, res) => {
+  res.redirect(307, "/mcp-api/messages");
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 MCP Server running on port ${PORT}`);
-  console.log(`📡 MCP endpoint: http://localhost:${PORT}/mcp-api`);
+  console.log(`📡 SSE endpoint: http://localhost:${PORT}/mcp-api/sse`);
+  console.log(`💬 Messages endpoint: http://localhost:${PORT}/mcp-api/messages`);
   console.log(`🔐 OAuth server: https://auth.drivenmetrics.com`);
   console.log(`✅ Ready for Claude.ai connections!`);
+});
+
+// Handle server shutdown gracefully
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down server...');
+  
+  // Close all active transports
+  for (const sessionId in transports) {
+    try {
+      console.log(`Closing transport for session ${sessionId}`);
+      await transports[sessionId].close();
+      delete transports[sessionId];
+    } catch (error) {
+      console.error(`Error closing transport for session ${sessionId}:`, error);
+    }
+  }
+  
+  console.log('Server shutdown complete');
+  process.exit(0);
 });
