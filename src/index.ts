@@ -42,8 +42,21 @@ if (!supabase) {
 const app = express();
 app.use(cookieParser());
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, '..', 'templates'));
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Find the root directory (where package.json is)
+// In dev: src/index.ts -> go up one level
+// In prod: dist/index.js -> go up one level
+const rootDir = path.join(__dirname, '..');
+const templatesDir = path.join(rootDir, 'templates');
+const publicDir = path.join(rootDir, 'public');
+
+console.log('🔍 Directory paths:');
+console.log('  - __dirname:', __dirname);
+console.log('  - rootDir:', rootDir);
+console.log('  - templatesDir:', templatesDir);
+console.log('  - NODE_ENV:', process.env.NODE_ENV);
+
+app.set('views', templatesDir);
+app.use(express.static(publicDir));
 
 // Store auth context by session ID
 const authContext = new Map<string, { userId: string; token: string }>();
@@ -741,10 +754,25 @@ app.post("/api/oauth/complete", express.urlencoded({ extended: true }), async (r
   res.redirect(`/authorize?state=${oauth_state}`);
 });
 
+// Error handling middleware
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Error:', err);
+  res.status(500).send(`
+    <html>
+      <body style="font-family: sans-serif; padding: 20px;">
+        <h1>Server Error</h1>
+        <p>Sorry, something went wrong.</p>
+        ${process.env.NODE_ENV !== 'production' ? `<pre>${err.stack}</pre>` : ''}
+      </body>
+    </html>
+  `);
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 MCP Server running on port ${PORT}`);
   console.log(`📡 MCP endpoint: http://localhost:${PORT}/mcp-api`);
   console.log(`🔐 OAuth server: ${baseUrl}`);
+  console.log(`📁 Template directory: ${templatesDir}`);
   console.log(`✅ Ready for Claude.ai connections!`);
 });
