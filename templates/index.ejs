@@ -21,6 +21,14 @@
             border: 1px solid #2a2a2a;
         }
         h1 { color: #ffffff; margin-bottom: 10px; }
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo img {
+            height: 48px;
+            width: auto;
+        }
         .status { color: #4ade80; margin-bottom: 30px; }
         .section {
             background: #0a0a0a;
@@ -53,7 +61,10 @@
 </head>
 <body>
     <div class="container">
-        <h1>Drivenmetrics MCP Server</h1>
+        <div class="logo">
+            <img src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" alt="Drivenmetrics">
+        </div>
+        <h1>MCP Server</h1>
         <p class="status">✅ Server is running</p>
         
         <% if (user) { %>

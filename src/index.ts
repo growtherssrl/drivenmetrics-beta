@@ -628,7 +628,7 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
   const oauthState = oauthStates.get(state);
   if (!oauthState) {
     // Regular login without OAuth flow
-    return res.redirect(req.body.next_url || '/setup/integrations');
+    return res.redirect(req.body.next_url || '/dashboard');
   }
   
   // Generate authorization code
@@ -761,6 +761,11 @@ app.get("/", (req, res) => {
   const sessionId = req.cookies?.session_id;
   const session = sessionId ? sessions.get(sessionId) : null;
   
+  // Redirect logged-in users to dashboard
+  if (session) {
+    return res.redirect('/dashboard');
+  }
+  
   try {
     res.render('index', {
       user: session
@@ -778,6 +783,118 @@ app.get("/", (req, res) => {
       user: session ? { email: session.email } : null
     });
   }
+});
+
+// Dashboard page
+app.get("/dashboard", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.redirect('/login');
+  }
+  
+  const session = sessions.get(sessionId);
+  const userId = session.user_id;
+  
+  // Check integrations status
+  let hasFacebook = false;
+  let hasClaude = false;
+  let apiCalls = 0;
+  
+  if (supabase) {
+    try {
+      // Check Facebook connection
+      const { data: fbData } = await supabase
+        .from("facebook_tokens")
+        .select("access_token")
+        .eq("user_id", userId)
+        .eq("service", "competition")
+        .single();
+      hasFacebook = !!fbData;
+      
+      // Check Claude connection (API tokens)
+      const { data: tokenData } = await supabase
+        .from("api_tokens")
+        .select("token")
+        .eq("user_id", userId)
+        .limit(1);
+      hasClaude = !!(tokenData && tokenData.length > 0);
+      
+      // Get API call count (if table exists)
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const { data: callData } = await supabase
+          .from("api_usage")
+          .select("count")
+          .eq("user_id", userId)
+          .eq("date", today)
+          .single();
+        apiCalls = callData?.count || 0;
+      } catch (e) {
+        // API usage table might not exist
+      }
+    } catch (error) {
+      console.log("Error fetching integration status:", error);
+    }
+  } else {
+    // Demo mode
+    hasFacebook = true;
+    hasClaude = true;
+    apiCalls = 42;
+  }
+  
+  try {
+    res.render('dashboard', {
+      user: session,
+      has_facebook: hasFacebook,
+      has_claude: hasClaude,
+      api_calls: apiCalls
+    });
+  } catch (err) {
+    console.error('Dashboard template error:', err);
+    // Fallback HTML
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Dashboard - Drivenmetrics</title>
+        <style>
+          body { font-family: sans-serif; background: #0a0a0a; color: white; padding: 20px; }
+          .container { max-width: 800px; margin: 0 auto; }
+          .header { background: #1a1a1a; padding: 20px; border-radius: 12px; margin-bottom: 20px; }
+          .card { background: #1a1a1a; padding: 20px; border-radius: 12px; margin: 20px 0; }
+          a { color: #0066ff; text-decoration: none; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Dashboard</h1>
+            <p>Welcome back, ${session.email}</p>
+          </div>
+          <div class="card">
+            <h2>Integration Status</h2>
+            <p>Facebook: ${hasFacebook ? '✅ Connected' : '❌ Not Connected'}</p>
+            <p>Claude.ai: ${hasClaude ? '✅ Connected' : '❌ Not Connected'}</p>
+          </div>
+          <div class="card">
+            <a href="/setup/integrations">Manage Integrations</a> | 
+            <a href="/logout">Logout</a>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
+// Logout route
+app.get("/logout", (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (sessionId) {
+    sessions.delete(sessionId);
+    res.clearCookie('session_id');
+  }
+  res.redirect('/');
 });
 
 // Setup integrations page
