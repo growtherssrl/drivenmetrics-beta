@@ -9,6 +9,9 @@ import {
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 import axios from "axios";
+import crypto from "crypto";
+import path from "path";
+import cookieParser from "cookie-parser";
 
 dotenv.config();
 
@@ -34,9 +37,16 @@ if (!supabase) {
 
 // Express app
 const app = express();
+app.use(cookieParser());
 
 // Store auth context by session ID
 const authContext = new Map<string, { userId: string; token: string }>();
+
+// OAuth state storage
+const oauthStates = new Map<string, any>();
+
+// Active sessions
+const sessions = new Map<string, any>();
 
 // Database helpers
 async function getUserByToken(token: string): Promise<string | null> {
@@ -340,9 +350,10 @@ app.get("/health", (req, res) => {
 app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
   console.log("📋 OAuth metadata requested for /mcp-api/sse");
   res.header("Access-Control-Allow-Origin", "*");
+  const baseUrl = process.env.BASE_URL || `https://drivenmetrics-mcp.onrender.com`;
   res.json({
-    resource: `${process.env.BASE_URL || `https://drivenmetrics-mcp.onrender.com`}/mcp-api/sse`,
-    oauth_authorization_server: "https://auth.drivenmetrics.com",
+    resource: `${baseUrl}/mcp-api/sse`,
+    oauth_authorization_server: baseUrl,
     oauth_scopes_supported: ["mcp"],
     mcp_version: "2024-11-05"
   });
@@ -351,10 +362,11 @@ app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
 app.get("/.well-known/oauth-authorization-server", (req, res) => {
   console.log("📋 OAuth authorization server metadata requested");
   res.header("Access-Control-Allow-Origin", "*");
+  const baseUrl = process.env.BASE_URL || `https://drivenmetrics-mcp.onrender.com`;
   res.json({
-    issuer: "https://auth.drivenmetrics.com",
-    authorization_endpoint: "https://auth.drivenmetrics.com/authorize",
-    token_endpoint: "https://auth.drivenmetrics.com/token",
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/authorize`,
+    token_endpoint: `${baseUrl}/token`,
     token_endpoint_auth_methods_supported: ["none"],
     response_types_supported: ["code"],
     scopes_supported: ["mcp"],
@@ -398,6 +410,216 @@ app.use("/mcp-api", express.json(), async (req, res, next) => {
   
   // Handle the MCP request
   await transport.handleRequest(req, res, req.body);
+});
+
+// OAuth Authorization endpoint
+app.get("/authorize", (req, res) => {
+  const { 
+    response_type,
+    client_id,
+    redirect_uri,
+    state,
+    code_challenge,
+    code_challenge_method,
+    scope
+  } = req.query;
+  
+  console.log("🔐 OAuth authorize request:", { client_id, redirect_uri, state });
+  
+  // Check for existing session
+  const sessionId = req.cookies?.session_id;
+  if (sessionId && sessions.has(sessionId)) {
+    // User already logged in, generate code immediately
+    const session = sessions.get(sessionId);
+    const authCode = crypto.randomBytes(32).toString('hex');
+    
+    oauthStates.set(authCode, {
+      client_id,
+      redirect_uri,
+      code_challenge,
+      code_challenge_method,
+      scope: scope || "mcp",
+      user_id: session.user_id,
+      created_at: Date.now()
+    });
+    
+    // Redirect back with code
+    const redirectUrl = new URL(redirect_uri as string);
+    redirectUrl.searchParams.set('code', authCode);
+    redirectUrl.searchParams.set('state', state as string);
+    
+    console.log("✅ User already authenticated, redirecting with code");
+    return res.redirect(redirectUrl.toString());
+  }
+  
+  // Store OAuth state for after login
+  const stateId = crypto.randomBytes(16).toString('hex');
+  oauthStates.set(stateId, {
+    response_type,
+    client_id,
+    redirect_uri,
+    state,
+    code_challenge,
+    code_challenge_method,
+    scope
+  });
+  
+  // Show login page
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Login - Drivenmetrics MCP</title>
+      <style>
+        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
+        .login-box { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 300px; }
+        h2 { text-align: center; margin-bottom: 1.5rem; }
+        input { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 4px; }
+        button { width: 100%; padding: 0.75rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .demo-note { margin-top: 1rem; padding: 1rem; background: #f0f8ff; border-radius: 4px; font-size: 0.9rem; }
+      </style>
+    </head>
+    <body>
+      <div class="login-box">
+        <h2>Login to Drivenmetrics</h2>
+        <form method="POST" action="/login">
+          <input type="hidden" name="state" value="${stateId}">
+          <input type="email" name="email" placeholder="Email" required>
+          <input type="password" name="password" placeholder="Password" required>
+          <button type="submit">Login</button>
+        </form>
+        <div class="demo-note">
+          <strong>Demo Mode:</strong><br>
+          Use any email/password to login in demo mode.
+        </div>
+      </div>
+    </body>
+    </html>
+  `);
+});
+
+// Login endpoint
+app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
+  const { email, password, state } = req.body;
+  
+  console.log("🔐 Login attempt:", { email, state });
+  
+  // In demo mode or with Supabase
+  let userId = null;
+  
+  if (supabase) {
+    // Real authentication with Supabase
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (data?.user) {
+        userId = data.user.id;
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+    }
+  } else {
+    // Demo mode - accept any credentials
+    userId = `demo_${email}`;
+    console.log("🎮 Demo mode login:", userId);
+  }
+  
+  if (!userId) {
+    return res.status(401).send("Invalid credentials");
+  }
+  
+  // Create session
+  const sessionId = crypto.randomBytes(32).toString('hex');
+  sessions.set(sessionId, {
+    user_id: userId,
+    email: email,
+    created_at: Date.now()
+  });
+  
+  // Set session cookie
+  res.cookie('session_id', sessionId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  });
+  
+  // Get OAuth state
+  const oauthState = oauthStates.get(state);
+  if (!oauthState) {
+    return res.redirect('/');
+  }
+  
+  // Generate authorization code
+  const authCode = crypto.randomBytes(32).toString('hex');
+  oauthStates.set(authCode, {
+    ...oauthState,
+    user_id: userId,
+    created_at: Date.now()
+  });
+  
+  // Clean up state
+  oauthStates.delete(state);
+  
+  // Redirect back with code
+  const redirectUrl = new URL(oauthState.redirect_uri);
+  redirectUrl.searchParams.set('code', authCode);
+  redirectUrl.searchParams.set('state', oauthState.state);
+  
+  console.log("✅ Login successful, redirecting with code");
+  res.redirect(redirectUrl.toString());
+});
+
+// Token endpoint
+app.post("/token", express.urlencoded({ extended: true }), async (req, res) => {
+  const { grant_type, code, redirect_uri, code_verifier } = req.body;
+  
+  console.log("🔐 Token request:", { grant_type, code: code?.substring(0, 10) + "..." });
+  
+  if (grant_type !== "authorization_code") {
+    return res.status(400).json({ error: "unsupported_grant_type" });
+  }
+  
+  const codeData = oauthStates.get(code);
+  if (!codeData) {
+    return res.status(400).json({ error: "invalid_grant" });
+  }
+  
+  // Verify code challenge if present
+  if (codeData.code_challenge && codeData.code_challenge_method === "S256") {
+    const verifier = crypto.createHash('sha256').update(code_verifier).digest('base64url');
+    if (verifier !== codeData.code_challenge) {
+      return res.status(400).json({ error: "invalid_grant" });
+    }
+  }
+  
+  // Generate access token
+  const accessToken = `dmgt_${crypto.randomBytes(32).toString('hex')}`;
+  
+  // Save token to database if available
+  if (supabase && codeData.user_id) {
+    try {
+      await supabase
+        .from("api_tokens")
+        .insert({
+          token: accessToken,
+          user_id: codeData.user_id,
+          scopes: [codeData.scope || "mcp"],
+          created_at: new Date().toISOString()
+        });
+    } catch (error) {
+      console.error("Error saving token:", error);
+    }
+  }
+  
+  // Clean up code
+  oauthStates.delete(code);
+  
+  res.json({
+    access_token: accessToken,
+    token_type: "Bearer",
+    expires_in: 7200,
+    scope: codeData.scope || "mcp"
+  });
 });
 
 // Legacy endpoint redirects
