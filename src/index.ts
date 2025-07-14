@@ -19,25 +19,59 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
 const FB_GRAPH_VERSION = "v21.0";
 
 // Initialize Supabase
-const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+const supabase = SUPABASE_URL && SUPABASE_KEY && SUPABASE_KEY !== "your-supabase-service-key" 
+  ? createClient(SUPABASE_URL, SUPABASE_KEY) 
+  : null;
+
+// Demo mode warning
+if (!supabase) {
+  console.log("⚠️ WARNING: Supabase client not initialized");
+  console.log("  - SUPABASE_URL:", SUPABASE_URL ? "Set" : "Missing");
+  console.log("  - SUPABASE_KEY:", SUPABASE_KEY === "your-supabase-service-key" ? "Using placeholder" : (SUPABASE_KEY ? "Set" : "Missing"));
+  console.log("  - Server will run in DEMO MODE");
+  console.log("  - Demo tokens: dmgt_demo_token");
+}
 
 // Express app
 const app = express();
 
+// Store auth context by session ID
+const authContext = new Map<string, { userId: string; token: string }>();
+
 // Database helpers
 async function getUserByToken(token: string): Promise<string | null> {
-  if (!supabase || !token) return null;
+  if (!token) {
+    console.log("[DB] getUserByToken: No token provided");
+    return null;
+  }
+  
+  // Demo mode - accept demo tokens
+  if (!supabase) {
+    if (token === "dmgt_demo_token" || token.startsWith("dmgt_demo_")) {
+      console.log("[DB] Demo mode: Accepting demo token");
+      return "demo_user";
+    }
+    console.log("[DB] Demo mode: Invalid token");
+    return null;
+  }
   
   try {
-    const { data } = await supabase
+    console.log("[DB] Looking up token in database:", token.substring(0, 10) + "...");
+    const { data, error } = await supabase
       .from("api_tokens")
       .select("user_id")
       .eq("token", token)
       .single();
     
+    if (error) {
+      console.error("[DB] Database error:", error);
+      return null;
+    }
+    
+    console.log("[DB] Token lookup result:", data ? "User found" : "User not found");
     return data?.user_id || null;
   } catch (error) {
-    console.error("Error getting user:", error);
+    console.error("[DB] Error getting user:", error);
     return null;
   }
 }
@@ -151,10 +185,43 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
 mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args } = request.params;
   
-  // Extract auth info from the request
-  const auth = (extra as any)?.request?.auth;
+  console.log("[TOOL] Tool called:", name, "with args:", args);
+  console.log("[TOOL] Extra object:", extra ? Object.keys(extra) : "No extra");
+  
+  // Try multiple ways to get session ID
+  let sessionId = null;
+  
+  // Method 1: From request metadata
+  if ((request as any)._meta?.sessionId) {
+    sessionId = (request as any)._meta.sessionId;
+    console.log("[TOOL] Session ID from _meta:", sessionId);
+  }
+  
+  // Method 2: From extra parameter
+  if (!sessionId && (extra as any)?.sessionId) {
+    sessionId = (extra as any).sessionId;
+    console.log("[TOOL] Session ID from extra:", sessionId);
+  }
+  
+  // Method 3: Get the most recent session from authContext
+  if (!sessionId && authContext.size > 0) {
+    // Get the last entry
+    const entries = Array.from(authContext.entries());
+    sessionId = entries[entries.length - 1][0];
+    console.log("[TOOL] Using most recent session:", sessionId);
+  }
+  
+  // Get auth from context
+  let auth = null;
+  if (sessionId) {
+    auth = authContext.get(sessionId);
+  }
+  
+  console.log("[TOOL] Auth found:", auth ? { userId: auth.userId, hasToken: !!auth.token } : "No auth");
+  
   const userId = auth?.userId || null;
   const fbToken = userId ? await getFacebookToken(userId) : null;
+  console.log("[TOOL] Tool execution context:", { userId, hasFbToken: !!fbToken });
   
   try {
     let result: any;
@@ -233,6 +300,7 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   }
 });
 
+
 // Create transport with session management
 const transport = new StreamableHTTPServerTransport({
   sessionIdGenerator: () => Math.random().toString(36).substring(2, 15),
@@ -297,15 +365,35 @@ app.get("/.well-known/oauth-authorization-server", (req, res) => {
 
 // Mount the MCP transport handler with authentication
 app.use("/mcp-api", express.json(), async (req, res, next) => {
+  console.log("[AUTH] MCP Request received:", {
+    method: req.method,
+    path: req.path,
+    headers: {
+      authorization: req.headers.authorization ? "Bearer ***" : "None",
+      contentType: req.headers["content-type"],
+      sessionId: req.headers["mcp-session-id"] || "None"
+    }
+  });
+  
+  // Extract session ID
+  const sessionId = req.headers["mcp-session-id"] as string;
+  
   // Extract auth token from headers
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
+    console.log("[AUTH] Token extracted:", token.substring(0, 10) + "...");
+    
     const userId = await getUserByToken(token);
-    if (userId) {
-      // Add auth info to request
-      (req as any).auth = { userId, token };
+    console.log("[AUTH] User ID from token:", userId || "Not found");
+    
+    if (userId && sessionId) {
+      // Store auth info in global context
+      authContext.set(sessionId, { userId, token });
+      console.log("[AUTH] Stored auth for session:", sessionId);
     }
+  } else {
+    console.log("[AUTH] No Bearer token in Authorization header");
   }
   
   // Handle the MCP request
