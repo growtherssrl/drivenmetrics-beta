@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accesso - Drivenmetrics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Elementi decorativi di sfondo */
+        .bg-shapes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+        
+        .shape {
+            position: absolute;
+            border-radius: 50% 30% 70% 40%;
+            opacity: 0.08;
+            animation: float 25s ease-in-out infinite;
+        }
+        
+        .shape1 {
+            width: 280px;
+            height: 280px;
+            background: #667eea;
+            top: 15%;
+            right: -60px;
+            animation-delay: 0s;
+        }
+        
+        .shape2 {
+            width: 220px;
+            height: 220px;
+            background: #764ba2;
+            bottom: 25%;
+            left: -110px;
+            animation-delay: -8s;
+        }
+        
+        .shape3 {
+            width: 160px;
+            height: 160px;
+            background: #8bc34a;
+            top: 65%;
+            right: 25%;
+            animation-delay: -16s;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+                border-radius: 50% 30% 70% 40%;
+            }
+            33% {
+                transform: translateY(-25px) rotate(120deg);
+                border-radius: 30% 60% 40% 70%;
+            }
+            66% {
+                transform: translateY(25px) rotate(240deg);
+                border-radius: 70% 40% 30% 60%;
+            }
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4);
+            padding: 48px;
+            text-align: center;
+            max-width: 520px;
+            width: 100%;
+            animation: slideUp 0.8s ease-out;
+            position: relative;
+            z-index: 2;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        .login-form {
+            margin-top: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #424242;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .form-group input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            background: white;
+        }
+        
+        .toggle-mode {
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .toggle-mode a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .toggle-mode a:hover {
+            text-decoration: underline;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+        
+        .logo-img {
+            height: 40px;
+            width: auto;
+            animation: logo-pulse 2s ease-in-out infinite;
+        }
+        
+        /* Fallback se il logo non si carica */
+        .logo-fallback {
+            display: none;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon-fallback {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #e91e63 0%, #00bcd4 50%, #8bc34a 100%);
+            position: relative;
+            transform: rotate(45deg);
+            border-radius: 6px;
+        }
+        
+        .logo-icon-fallback::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #8bc34a 0%, #00bcd4 50%, #e91e63 100%);
+            transform: rotate(90deg);
+            border-radius: 6px;
+            opacity: 0.8;
+        }
+        
+        .logo-text-fallback {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        
+        @keyframes logo-pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+        
+        h1 {
+            color: #1a1a1a;
+            font-size: 32px;
+            margin-bottom: 16px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .oauth-notice {
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 32px;
+            text-align: center;
+            font-size: 16px;
+            color: #424242;
+        }
+        
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+            text-decoration: none;
+            display: inline-block;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .btn:hover::before {
+            left: 100%;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .info-box {
+            padding: 20px;
+            border-radius: 16px;
+            margin: 20px 0;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .info-box-gradient {
+            background: linear-gradient(135deg, rgba(139, 195, 74, 0.08) 0%, rgba(0, 188, 212, 0.08) 100%);
+            border-color: rgba(139, 195, 74, 0.2);
+        }
+        
+        .info-box-yellow {
+            background: linear-gradient(135deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 152, 0, 0.1) 100%);
+            border-color: rgba(255, 193, 7, 0.2);
+            color: #f57c00;
+        }
+        
+        .info-box-green {
+            background: linear-gradient(135deg, rgba(139, 195, 74, 0.1) 0%, rgba(76, 175, 80, 0.1) 100%);
+            border-color: rgba(139, 195, 74, 0.2);
+            color: #2e7d32;
+        }
+        
+        .feature-list {
+            text-align: left;
+            margin-top: 15px;
+            color: #424242;
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .feature-list li {
+            margin-bottom: 10px;
+            padding-left: 25px;
+            position: relative;
+        }
+        
+        .feature-list li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #8bc34a;
+            font-weight: bold;
+        }
+        
+        .divider {
+            height: 1px;
+            background: rgba(0, 0, 0, 0.1);
+            margin: 30px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-shapes">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+    </div>
+
+    <div class="container">
+        <div class="logo">
+            <img 
+                src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" 
+                alt="Drivenmetrics Logo" 
+                class="logo-img"
+                onerror="document.querySelector('.logo-fallback').style.display='flex'; this.style.display='none';"
+            />
+            <div class="logo-fallback" style="display: none;">
+                <div class="logo-icon-fallback"></div>
+                <div class="logo-text-fallback">drivenmetrics</div>
+            </div>
+        </div>
+        
+        <h1>Accesso Account</h1>
+        
+        {% if state %}
+        <div class="oauth-notice">
+            <p>🔗 Stai effettuando l'accesso per autorizzare Claude.ai</p>
+        </div>
+        {% endif %}
+        
+        <div id="error-message" class="info-box info-box-yellow" style="display: none;"></div>
+        <div id="success-message" class="info-box info-box-green" style="display: none;"></div>
+        
+        <form id="auth-form" class="login-form">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required placeholder="esempio@email.com">
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required placeholder="••••••••" minlength="6">
+            </div>
+            
+            <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%;">
+                <span id="btn-text">Accedi</span>
+            </button>
+        </form>
+        
+        <div class="toggle-mode">
+            <a href="#" id="toggle-mode">Non hai un account? Registrati</a>
+        </div>
+        
+        <div class="divider"></div>
+        
+        <div class="info-box info-box-gradient">
+            <h3>Come funziona:</h3>
+            <ol class="feature-list">
+                <li>Accedi o crea un account</li>
+                <li>Connetti il tuo account Facebook</li>
+                <li>Aggiungi questo server MCP in Claude.ai</li>
+                <li>Analizza i competitor con comandi naturali</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let isSignUp = false;
+        const toggleLink = document.getElementById('toggle-mode');
+        const btnText = document.getElementById('btn-text');
+        const form = document.getElementById('auth-form');
+        const errorDiv = document.getElementById('error-message');
+        const successDiv = document.getElementById('success-message');
+        const submitBtn = document.getElementById('submit-btn');
+        
+        toggleLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            isSignUp = !isSignUp;
+            btnText.textContent = isSignUp ? 'Registrati' : 'Accedi';
+            toggleLink.textContent = isSignUp ? 'Hai già un account? Accedi' : 'Non hai un account? Registrati';
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+        });
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            // Reset messages
+            errorDiv.style.display = 'none';
+            successDiv.style.display = 'none';
+            
+            // Disable form
+            submitBtn.disabled = true;
+            btnText.textContent = isSignUp ? 'Registrazione...' : 'Accesso...';
+            
+            try {
+                // Always use create-session endpoint
+                const response = await fetch('/auth/create-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password,
+                        state: '{{ state }}',
+                        is_signup: isSignUp
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    successDiv.textContent = isSignUp ? 'Account creato con successo!' : 'Accesso effettuato!';
+                    successDiv.style.display = 'block';
+                    
+                    // Redirect after a short delay
+                    setTimeout(() => {
+                        window.location.href = data.redirect;
+                    }, 1000);
+                } else {
+                    throw new Error(data.detail || 'Operazione fallita');
+                }
+            } catch (error) {
+                errorDiv.textContent = error.message || 'Si è verificato un errore';
+                errorDiv.style.display = 'block';
+                
+                // Re-enable form
+                submitBtn.disabled = false;
+                btnText.textContent = isSignUp ? 'Registrati' : 'Accedi';
+            }
+        });
+    </script>
+</body>
+</html>

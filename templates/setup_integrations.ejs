@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integrations - Drivenmetrics</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1, h2 { color: #ffffff; }
+        .integration-card {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-left: 12px;
+        }
+        .connected {
+            background: #10b98133;
+            color: #4ade80;
+        }
+        .disconnected {
+            background: #ef444433;
+            color: #f87171;
+        }
+        button {
+            background: #0066ff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0052cc;
+        }
+        .oauth-pending {
+            background: #f59e0b33;
+            border: 1px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .back-link {
+            color: #0066ff;
+            text-decoration: none;
+            margin-bottom: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Home</a>
+        
+        <h1>Integrations</h1>
+        
+        <% if (oauth_state) { %>
+        <div class="oauth-pending">
+            <h3>OAuth Integration Pending</h3>
+            <p>Complete the OAuth flow to grant Claude.ai access to your account.</p>
+            <form method="POST" action="/api/oauth/complete">
+                <input type="hidden" name="oauth_state" value="<%= oauth_state %>">
+                <button type="submit">Complete OAuth Setup</button>
+            </form>
+        </div>
+        <% } %>
+        
+        <div class="integration-card">
+            <h2>
+                Facebook Ads
+                <span class="status <%= has_facebook ? 'connected' : 'disconnected' %>">
+                    <%= has_facebook ? 'Connected' : 'Not Connected' %>
+                </span>
+            </h2>
+            
+            <% if (has_facebook) { %>
+                <p>Your Facebook account is connected and ready to use.</p>
+                <p>You can now use the Facebook Ads tools in Claude.ai.</p>
+            <% } else { %>
+                <p>Connect your Facebook account to enable competitor ad analysis.</p>
+                <% if (fb_app_id) { %>
+                    <button onclick="connectFacebook()">Connect Facebook</button>
+                    
+                    <script>
+                        function connectFacebook() {
+                            const fbAuthUrl = 'https://www.facebook.com/dialog/oauth?' + new URLSearchParams({
+                                client_id: '<%= fb_app_id %>',
+                                redirect_uri: '<%= fb_redirect_uri %>',
+                                scope: 'ads_read',
+                                state: 'fb_' + Date.now()
+                            });
+                            window.location.href = fbAuthUrl;
+                        }
+                    </script>
+                <% } else { %>
+                    <p style="color: #f87171;">Facebook App ID not configured. Please set FB_APP_ID environment variable.</p>
+                <% } %>
+            <% } %>
+        </div>
+        
+        <div class="integration-card">
+            <h2>MCP API Access</h2>
+            <p>Use these credentials to test the API directly:</p>
+            <div style="background: #0a0a0a; padding: 16px; border-radius: 8px; margin-top: 12px;">
+                <code>
+                    curl -H "Authorization: Bearer dmgt_demo_token" \<br>
+                    &nbsp;&nbsp;<%= process.env.NODE_ENV === 'production' ? 'https://drivenmetrics-mcp.onrender.com' : 'http://localhost:' + (process.env.PORT || 3000) %>/mcp-api
+                </code>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

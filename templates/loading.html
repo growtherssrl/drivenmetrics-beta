@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autenticazione in Corso - Drivenmetrics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Elementi decorativi di sfondo */
+        .bg-shapes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+        
+        .shape {
+            position: absolute;
+            border-radius: 50% 30% 70% 40%;
+            opacity: 0.08;
+            animation: float 25s ease-in-out infinite;
+        }
+        
+        .shape1 {
+            width: 280px;
+            height: 280px;
+            background: #00bcd4;
+            top: 15%;
+            right: -60px;
+            animation-delay: 0s;
+        }
+        
+        .shape2 {
+            width: 220px;
+            height: 220px;
+            background: #8bc34a;
+            bottom: 25%;
+            left: -110px;
+            animation-delay: -8s;
+        }
+        
+        .shape3 {
+            width: 160px;
+            height: 160px;
+            background: #e91e63;
+            top: 65%;
+            right: 25%;
+            animation-delay: -16s;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+                border-radius: 50% 30% 70% 40%;
+            }
+            33% {
+                transform: translateY(-25px) rotate(120deg);
+                border-radius: 30% 60% 40% 70%;
+            }
+            66% {
+                transform: translateY(25px) rotate(240deg);
+                border-radius: 70% 40% 30% 60%;
+            }
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 32px 64px rgba(0, 0, 0, 0.3);
+            padding: 48px;
+            text-align: center;
+            max-width: 520px;
+            width: 100%;
+            animation: slideUp 0.8s ease-out;
+            position: relative;
+            z-index: 2;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+        
+        .logo-img {
+            height: 40px;
+            width: auto;
+            animation: logo-pulse 2s ease-in-out infinite;
+        }
+        
+        /* Fallback se il logo non si carica */
+        .logo-fallback {
+            display: none;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon-fallback {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #e91e63 0%, #00bcd4 50%, #8bc34a 100%);
+            position: relative;
+            transform: rotate(45deg);
+            border-radius: 6px;
+        }
+        
+        .logo-icon-fallback::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #8bc34a 0%, #00bcd4 50%, #e91e63 100%);
+            transform: rotate(90deg);
+            border-radius: 6px;
+            opacity: 0.8;
+        }
+        
+        .logo-text-fallback {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        
+        @keyframes logo-pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.05);
+            }
+        }
+        
+        .loading-section {
+            margin-bottom: 32px;
+        }
+        
+        .loading-spinner {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            position: relative;
+        }
+        
+        .spinner-ring {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 4px solid transparent;
+            border-radius: 50%;
+            animation: spin 2s linear infinite;
+        }
+        
+        .spinner-ring:nth-child(1) {
+            border-top-color: #667eea;
+            animation-delay: 0s;
+        }
+        
+        .spinner-ring:nth-child(2) {
+            border-right-color: #764ba2;
+            animation-delay: 0.3s;
+            animation-duration: 2.5s;
+        }
+        
+        .spinner-ring:nth-child(3) {
+            border-bottom-color: #8bc34a;
+            animation-delay: 0.6s;
+            animation-duration: 3s;
+        }
+        
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+        
+        h1 {
+            color: #1a1a1a;
+            font-size: 32px;
+            margin-bottom: 16px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .loading-message {
+            color: #4a4a4a;
+            font-size: 18px;
+            margin-bottom: 32px;
+            animation: text-fade 2s ease-in-out infinite;
+        }
+        
+        @keyframes text-fade {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .progress-steps {
+            margin: 32px 0;
+            text-align: left;
+        }
+        
+        .step {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            padding: 16px;
+            border-radius: 12px;
+            transition: all 0.5s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .step::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.8s ease;
+        }
+        
+        .step.completed {
+            background: linear-gradient(135deg, rgba(139, 195, 74, 0.1) 0%, rgba(76, 175, 80, 0.1) 100%);
+            border: 1px solid rgba(139, 195, 74, 0.2);
+        }
+        
+        .step.completed::before {
+            left: 100%;
+        }
+        
+        .step.active {
+            background: linear-gradient(135deg, rgba(0, 188, 212, 0.1) 0%, rgba(33, 150, 243, 0.1) 100%);
+            border: 1px solid rgba(0, 188, 212, 0.2);
+            animation: step-pulse 1.5s ease-in-out infinite;
+        }
+        
+        .step.pending {
+            background: rgba(245, 245, 245, 0.5);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        @keyframes step-pulse {
+            0%, 100% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.02);
+            }
+        }
+        
+        .step-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 16px;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .step.completed .step-icon {
+            background: linear-gradient(135deg, #8bc34a 0%, #4caf50 100%);
+            color: white;
+            animation: checkmark-bounce 0.6s ease-out;
+        }
+        
+        @keyframes checkmark-bounce {
+            0% {
+                transform: scale(0);
+            }
+            50% {
+                transform: scale(1.2);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+        
+        .step.active .step-icon {
+            background: linear-gradient(135deg, #00bcd4 0%, #2196f3 100%);
+            color: white;
+            animation: active-pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes active-pulse {
+            0%, 100% {
+                transform: scale(1);
+                box-shadow: 0 0 0 0 rgba(0, 188, 212, 0.7);
+            }
+            50% {
+                transform: scale(1.05);
+                box-shadow: 0 0 0 8px rgba(0, 188, 212, 0);
+            }
+        }
+        
+        .step.pending .step-icon {
+            background: #e0e0e0;
+            color: #999;
+        }
+        
+        .step-text {
+            color: #4a4a4a;
+            font-size: 15px;
+            font-weight: 500;
+            flex: 1;
+        }
+        
+        .step.completed .step-text {
+            color: #2e7d32;
+        }
+        
+        .step.active .step-text {
+            color: #1976d2;
+            font-weight: 600;
+        }
+        
+        .instructions {
+            color: #666;
+            font-size: 15px;
+            margin-top: 24px;
+            line-height: 1.6;
+            padding: 20px;
+            background: rgba(0, 188, 212, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(0, 188, 212, 0.1);
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .footer-text {
+            opacity: 0.8;
+        }
+        
+        .timeout-warning {
+            display: none;
+            margin-top: 24px;
+            padding: 16px;
+            background: linear-gradient(135deg, rgba(255, 87, 34, 0.1) 0%, rgba(233, 30, 99, 0.1) 100%);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 87, 34, 0.2);
+            color: #d84315;
+            font-size: 14px;
+            animation: warning-fade-in 0.5s ease-out;
+        }
+        
+        @keyframes warning-fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 32px 24px;
+                margin: 16px;
+            }
+            
+            h1 {
+                font-size: 28px;
+            }
+            
+            .loading-spinner {
+                width: 64px;
+                height: 64px;
+            }
+            
+            .step {
+                padding: 12px;
+            }
+            
+            .step-icon {
+                width: 28px;
+                height: 28px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-shapes">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+    </div>
+
+    <div class="container">
+        <div class="logo">
+            <img 
+                src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" 
+                alt="Drivenmetrics Logo" 
+                class="logo-img"
+                onerror="document.querySelector('.logo-fallback').style.display='flex'; this.style.display='none';"
+            />
+            <div class="logo-fallback" style="display: none;">
+                <div class="logo-icon-fallback"></div>
+                <div class="logo-text-fallback">drivenmetrics</div>
+            </div>
+        </div>
+        
+        <div class="loading-section">
+            <div class="loading-spinner">
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+            </div>
+            
+            <h1>Autenticazione in Corso</h1>
+            <div class="loading-message" id="loadingMessage">
+                Connessione con Facebook in corso...
+            </div>
+        </div>
+        
+        <div class="progress-steps">
+            <div class="step completed" id="step1">
+                <div class="step-icon">✓</div>
+                <div class="step-text">Connessione a Facebook stabilita</div>
+            </div>
+            
+            <div class="step active" id="step2">
+                <div class="step-icon">2</div>
+                <div class="step-text">Elaborazione credenziali di autenticazione</div>
+            </div>
+            
+            <div class="step pending" id="step3">
+                <div class="step-icon">3</div>
+                <div class="step-text">Verifica permessi e configurazione account</div>
+            </div>
+            
+            <div class="step pending" id="step4">
+                <div class="step-icon">4</div>
+                <div class="step-text">Completamento e reindirizzamento</div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            ⏳ <strong>Non chiudere questa finestra</strong><br>
+            L'autenticazione sarà completata automaticamente. Il processo richiede 
+            solitamente 5-10 secondi per verificare le credenziali con Facebook.
+        </div>
+        
+        <div class="timeout-warning" id="timeoutWarning">
+            ⚠️ <strong>L'autenticazione sta richiedendo più tempo del previsto.</strong><br>
+            Questo potrebbe essere dovuto a un carico elevato sui server di Facebook. 
+            Il processo continuerà automaticamente.
+        </div>
+        
+        <div class="footer">
+            <div class="footer-text">
+                Powered by <strong>Drivenmetrics</strong> • Growthers
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        let stepInterval;
+        let loadingMessages = [
+            'Connessione con Facebook in corso...',
+            'Elaborazione credenziali...',
+            'Verifica permessi account...',
+            'Finalizzazione autenticazione...',
+            'Reindirizzamento alla dashboard...'
+        ];
+        
+        function updateStep(step) {
+            // Update steps visual state
+            for (let i = 1; i <= 4; i++) {
+                const stepElement = document.getElementById(`step${i}`);
+                const icon = stepElement.querySelector('.step-icon');
+                
+                stepElement.classList.remove('completed', 'active', 'pending');
+                
+                if (i < step) {
+                    stepElement.classList.add('completed');
+                    icon.textContent = '✓';
+                } else if (i === step) {
+                    stepElement.classList.add('active');
+                    icon.textContent = i;
+                } else {
+                    stepElement.classList.add('pending');
+                    icon.textContent = i;
+                }
+            }
+            
+            // Update loading message
+            if (step <= loadingMessages.length) {
+                document.getElementById('loadingMessage').textContent = loadingMessages[step - 1];
+            }
+        }
+        
+        function simulateProgress() {
+            stepInterval = setInterval(() => {
+                currentStep++;
+                updateStep(currentStep);
+                
+                if (currentStep >= 5) {
+                    clearInterval(stepInterval);
+                    document.getElementById('loadingMessage').textContent = 'Autenticazione completata! Reindirizzamento in corso...';
+                    
+                    // Simula il completamento finale
+                    setTimeout(() => {
+                        // Se non c'è reindirizzamento reale, vai al callback
+                        if (!window.location.search.includes('code=')) {
+                            window.location.href = window.location.href.replace('/loading', '/callback');
+                        }
+                    }, 2000);
+                }
+            }, 1800);
+        }
+        
+        // Avvia la simulazione del progresso
+        setTimeout(() => {
+            simulateProgress();
+        }, 1000);
+        
+        // Mostra warning dopo 12 secondi
+        setTimeout(() => {
+            document.getElementById('timeoutWarning').style.display = 'block';
+        }, 12000);
+        
+        // Timeout di sicurezza dopo 20 secondi
+        setTimeout(() => {
+            clearInterval(stepInterval);
+            document.getElementById('loadingMessage').textContent = 'Reindirizzamento forzato...';
+            
+            setTimeout(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('code') || urlParams.get('error')) {
+                    window.location.href = '/api/authorise/facebook/callback' + window.location.search;
+                } else {
+                    window.location.href = '/error?message=Timeout';
+                }
+            }, 2000);
+        }, 20000);
+        
+        // Controlla se ci sono già parametri di callback nell'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('code') || urlParams.get('error')) {
+            // Se ci sono già i parametri di callback, accelera il processo
+            clearInterval(stepInterval);
+            
+            // Completa rapidamente tutti gli step
+            let fastStep = currentStep;
+            const fastInterval = setInterval(() => {
+                fastStep++;
+                updateStep(fastStep);
+                
+                if (fastStep >= 4) {
+                    clearInterval(fastInterval);
+                    document.getElementById('loadingMessage').textContent = 'Reindirizzamento immediato...';
+                    
+                    setTimeout(() => {
+                        if (urlParams.get('code')) {
+                            window.location.href = '/api/authorise/facebook/callback' + window.location.search;
+                        } else {
+                            window.location.href = '/error' + window.location.search;
+                        }
+                    }, 1500);
+                }
+            }, 400);
+        }
+        
+        // Gestisce il focus della finestra
+        window.addEventListener('focus', () => {
+            // Ricontrolla i parametri URL quando la finestra torna in focus
+            const newParams = new URLSearchParams(window.location.search);
+            if ((newParams.get('code') || newParams.get('error')) && !urlParams.get('code') && !urlParams.get('error')) {
+                window.location.reload();
+            }
+        });
+        
+        // Logging per analytics (opzionale)
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'auth_loading_start', {
+                'page_title': 'Facebook Auth Loading'
+            });
+        }
+    </script>
+</body>
+</html>

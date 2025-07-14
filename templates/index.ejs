@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drivenmetrics MCP Server</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            background: #1a1a1a;
+            border-radius: 12px;
+            border: 1px solid #2a2a2a;
+        }
+        h1 { color: #ffffff; margin-bottom: 10px; }
+        .status { color: #4ade80; margin-bottom: 30px; }
+        .section {
+            background: #0a0a0a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #2a2a2a;
+        }
+        code {
+            background: #2a2a2a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        a {
+            color: #0066ff;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .user-info {
+            background: #0066ff1a;
+            border: 1px solid #0066ff33;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Drivenmetrics MCP Server</h1>
+        <p class="status">✅ Server is running</p>
+        
+        <% if (user) { %>
+        <div class="user-info">
+            <strong>Logged in as:</strong> <%= user.email %><br>
+            <a href="/setup/integrations">Manage Integrations</a>
+        </div>
+        <% } %>
+        
+        <div class="section">
+            <h2>MCP Endpoint</h2>
+            <p>Use this URL in Claude.ai:</p>
+            <code><%= process.env.NODE_ENV === 'production' ? 'https://drivenmetrics-mcp.onrender.com' : 'http://localhost:' + (process.env.PORT || 3000) %>/mcp-api</code>
+        </div>
+        
+        <div class="section">
+            <h2>Available Tools</h2>
+            <ul>
+                <li><code>check_auth_status</code> - Check authentication status</li>
+                <li><code>search_competitor_ads</code> - Search competitor ads by keywords</li>
+                <li><code>search_ads_by_page</code> - Get ads from a Facebook page</li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>OAuth Endpoints</h2>
+            <ul>
+                <li><code>GET /authorize</code> - OAuth authorization endpoint</li>
+                <li><code>POST /token</code> - OAuth token endpoint</li>
+                <li><code>GET /.well-known/oauth-authorization-server</code> - OAuth metadata</li>
+            </ul>
+        </div>
+        
+        <% if (!user) { %>
+        <div class="section">
+            <p><a href="/login">Login</a> to manage integrations</p>
+        </div>
+        <% } %>
+    </div>
+</body>
+</html>

@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Errore di Autenticazione - Drivenmetrics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Elementi decorativi di sfondo */
+        .bg-shapes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 1;
+        }
+        
+        .shape {
+            position: absolute;
+            border-radius: 50% 30% 70% 40%;
+            opacity: 0.08;
+            animation: float 25s ease-in-out infinite;
+        }
+        
+        .shape1 {
+            width: 280px;
+            height: 280px;
+            background: #e91e63;
+            top: 15%;
+            right: -60px;
+            animation-delay: 0s;
+        }
+        
+        .shape2 {
+            width: 220px;
+            height: 220px;
+            background: #ff5722;
+            bottom: 25%;
+            left: -110px;
+            animation-delay: -8s;
+        }
+        
+        .shape3 {
+            width: 160px;
+            height: 160px;
+            background: #4a148c;
+            top: 65%;
+            right: 25%;
+            animation-delay: -16s;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px) rotate(0deg);
+                border-radius: 50% 30% 70% 40%;
+            }
+            33% {
+                transform: translateY(-25px) rotate(120deg);
+                border-radius: 30% 60% 40% 70%;
+            }
+            66% {
+                transform: translateY(25px) rotate(240deg);
+                border-radius: 70% 40% 30% 60%;
+            }
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 24px;
+            box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4);
+            padding: 48px;
+            text-align: center;
+            max-width: 520px;
+            width: 100%;
+            animation: slideUp 0.8s ease-out;
+            position: relative;
+            z-index: 2;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(40px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+        
+        .logo-img {
+            height: 40px;
+            width: auto;
+            animation: logo-pulse 2s ease-in-out infinite;
+        }
+        
+        /* Fallback se il logo non si carica */
+        .logo-fallback {
+            display: none;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .logo-icon-fallback {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #e91e63 0%, #00bcd4 50%, #8bc34a 100%);
+            position: relative;
+            transform: rotate(45deg);
+            border-radius: 6px;
+        }
+        
+        .logo-icon-fallback::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #8bc34a 0%, #00bcd4 50%, #e91e63 100%);
+            transform: rotate(90deg);
+            border-radius: 6px;
+            opacity: 0.8;
+        }
+        
+        .logo-text-fallback {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+        
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            background: linear-gradient(135deg, #e91e63 0%, #f44336 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px;
+            color: white;
+            animation: error-shake 1.5s ease-out;
+            box-shadow: 0 8px 24px rgba(244, 67, 54, 0.3);
+        }
+        
+        @keyframes error-shake {
+            0%, 100% {
+                transform: translateX(0) scale(1);
+            }
+            10%, 30%, 50%, 70%, 90% {
+                transform: translateX(-8px) scale(1.05);
+            }
+            20%, 40%, 60%, 80% {
+                transform: translateX(8px) scale(1.05);
+            }
+        }
+        
+        h1 {
+            color: #1a1a1a;
+            font-size: 32px;
+            margin-bottom: 16px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        
+        .error-message {
+            background: linear-gradient(135deg, rgba(233, 30, 99, 0.1) 0%, rgba(244, 67, 54, 0.1) 100%);
+            color: #c62828;
+            font-size: 16px;
+            margin-bottom: 24px;
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(233, 30, 99, 0.2);
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .error-details {
+            background: rgba(0, 0, 0, 0.05);
+            color: #424242;
+            font-size: 14px;
+            margin-bottom: 24px;
+            padding: 16px;
+            border-radius: 12px;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Courier New', monospace;
+            word-break: break-word;
+            text-align: left;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        
+        .troubleshooting {
+            text-align: left;
+            margin: 24px 0;
+            padding: 20px;
+            background: linear-gradient(135deg, rgba(0, 188, 212, 0.08) 0%, rgba(139, 195, 74, 0.08) 100%);
+            border-radius: 16px;
+            font-size: 15px;
+            border: 1px solid rgba(0, 188, 212, 0.1);
+        }
+        
+        .troubleshooting h3 {
+            color: #1a1a1a;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .troubleshooting ul {
+            color: #424242;
+            margin-left: 20px;
+            line-height: 1.6;
+        }
+        
+        .troubleshooting li {
+            margin-bottom: 8px;
+        }
+        
+        .instructions {
+            color: #666;
+            font-size: 15px;
+            margin-bottom: 32px;
+            line-height: 1.6;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .retry-button {
+            background: linear-gradient(135deg, #8bc34a 0%, #4caf50 100%);
+            color: white;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 24px rgba(139, 195, 74, 0.3);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .retry-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .retry-button:hover::before {
+            left: 100%;
+        }
+        
+        .retry-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(139, 195, 74, 0.4);
+        }
+        
+        .close-button {
+            background: rgba(255, 255, 255, 0.9);
+            color: #424242;
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            padding: 14px 28px;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .close-button:hover {
+            background: rgba(255, 255, 255, 1);
+            border-color: rgba(0, 0, 0, 0.2);
+            transform: translateY(-2px);
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+            color: #888;
+            font-size: 14px;
+        }
+        
+        .footer-text {
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 32px 24px;
+                margin: 16px;
+            }
+            
+            h1 {
+                font-size: 28px;
+            }
+            
+            .error-icon {
+                width: 64px;
+                height: 64px;
+                font-size: 28px;
+            }
+            
+            .action-buttons {
+                flex-direction: column;
+            }
+            
+            .retry-button,
+            .close-button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-shapes">
+        <div class="shape shape1"></div>
+        <div class="shape shape2"></div>
+        <div class="shape shape3"></div>
+    </div>
+
+    <div class="container">
+        <div class="logo">
+            <img 
+                src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" 
+                alt="Drivenmetrics Logo" 
+                class="logo-img"
+                onerror="document.querySelector('.logo-fallback').style.display='flex'; this.style.display='none';"
+            />
+            <div class="logo-fallback" style="display: none;">
+                <div class="logo-icon-fallback"></div>
+                <div class="logo-text-fallback">drivenmetrics</div>
+            </div>
+        </div>
+        
+        <div class="error-icon">⚠</div>
+        
+        <h1>Errore di Autenticazione</h1>
+        
+        <div class="error-message">
+            <strong>Si è verificato un errore durante l'autenticazione con Facebook</strong>
+        </div>
+        
+        <div class="error-details" id="errorDetails">
+            Errore sconosciuto
+        </div>
+        
+        <div class="troubleshooting">
+            <h3>💡 Cosa puoi provare:</h3>
+            <ul>
+                <li>Verifica di aver autorizzato tutte le permissioni richieste da Drivenmetrics</li>
+                <li>Controlla di essere connesso al tuo account Facebook</li>
+                <li>Prova a svuotare la cache del browser e i cookie</li>
+                <li>Riprova l'autenticazione tra qualche minuto</li>
+                <li>Assicurati che il tuo account Facebook abbia accesso alle API Business</li>
+            </ul>
+        </div>
+        
+        <div class="instructions">
+            Se il problema persiste, puoi contattare il nostro supporto tecnico o 
+            consultare la documentazione per verificare i requisiti dell'account Facebook.
+        </div>
+        
+        <div class="action-buttons">
+            <a href="#" class="retry-button" id="retryButton">
+                🔄 Riprova Autenticazione
+            </a>
+            <button class="close-button" onclick="window.close()">
+                Chiudi Finestra
+            </button>
+        </div>
+        
+        <div class="footer">
+            <div class="footer-text">
+                Powered by <strong>Drivenmetrics</strong> • Growthers
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Legge i parametri dall'URL per determinare il tipo di errore
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorType = urlParams.get('error');
+        const errorDescription = urlParams.get('error_description');
+        const errorReason = urlParams.get('error_reason');
+        
+        // Mappa degli errori Facebook più comuni
+        const errorMessages = {
+            'access_denied': {
+                title: 'Accesso Negato',
+                message: 'Hai rifiutato l\'autorizzazione per Drivenmetrics. Per utilizzare il servizio, è necessario autorizzare l\'accesso ai dati Facebook.',
+                suggestion: 'Riprova l\'autenticazione e accetta tutte le permissioni richieste.'
+            },
+            'temporarily_unavailable': {
+                title: 'Servizio Temporaneamente Non Disponibile',
+                message: 'I server di Facebook sono temporaneamente non disponibili.',
+                suggestion: 'Riprova tra qualche minuto.'
+            },
+            'invalid_request': {
+                title: 'Richiesta Non Valida',
+                message: 'La richiesta di autenticazione non è valida.',
+                suggestion: 'Ricarica la pagina e riprova l\'autenticazione.'
+            },
+            'server_error': {
+                title: 'Errore del Server',
+                message: 'Si è verificato un errore interno nel server di autenticazione.',
+                suggestion: 'Riprova più tardi o contatta il supporto.'
+            }
+        };
+        
+        // Aggiorna il messaggio di errore basato sul tipo
+        let errorInfo = errorMessages[errorType] || {
+            title: 'Errore Sconosciuto',
+            message: errorDescription || 'Si è verificato un errore non identificato.',
+            suggestion: 'Riprova l\'autenticazione.'
+        };
+        
+        // Costruisce il messaggio di errore completo
+        let fullErrorMessage = `${errorInfo.title}\n\n${errorInfo.message}`;
+        
+        if (errorDescription && errorType !== 'access_denied') {
+            fullErrorMessage += `\n\nDettagli tecnici: ${decodeURIComponent(errorDescription)}`;
+        }
+        
+        if (errorReason) {
+            fullErrorMessage += `\nCodice: ${errorReason}`;
+        }
+        
+        document.getElementById('errorDetails').textContent = fullErrorMessage;
+        
+        // Configura il pulsante di retry
+        const retryButton = document.getElementById('retryButton');
+        retryButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            // Mostra un messaggio di loading
+            retryButton.innerHTML = '⏳ Reindirizzamento...';
+            retryButton.style.opacity = '0.7';
+            
+            setTimeout(() => {
+                if (window.opener) {
+                    // Se c'è una finestra padre, ricarica quella e chiudi questa
+                    window.opener.location.reload();
+                    window.close();
+                } else {
+                    // Altrimenti torna alla home o riavvia il processo
+                    window.location.href = '/';
+                }
+            }, 1000);
+        });
+        
+        // Gestisce i tasti della tastiera
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                window.close();
+            }
+            if (e.key === 'Enter') {
+                retryButton.click();
+            }
+        });
+        
+        // Auto-close dopo 45 secondi se l'utente non fa nulla
+        let autoCloseTimer = setTimeout(() => {
+            if (confirm("Questa finestra verrà chiusa automaticamente. Vuoi chiuderla ora?")) {
+                window.close();
+            } else {
+                // Resetta il timer se l'utente cancella
+                autoCloseTimer = setTimeout(() => window.close(), 60000);
+            }
+        }, 45000);
+        
+        // Cancella il timer se l'utente interagisce con la pagina
+        document.addEventListener('click', () => {
+            clearTimeout(autoCloseTimer);
+        });
+        
+        // Logging dell'errore per analytics (opzionale)
+        if (typeof gtag !== 'undefined') {
+            gtag('event', 'auth_error', {
+                'error_type': errorType || 'unknown',
+                'error_description': errorDescription || 'none',
+                'page_title': 'Facebook Auth Error'
+            });
+        }
+    </script>
+</body>
+</html>

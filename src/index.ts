@@ -19,6 +19,9 @@ dotenv.config();
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+const FB_APP_ID = process.env.FB_APP_ID || "";
+const FB_APP_SECRET = process.env.FB_APP_SECRET || "";
 const FB_GRAPH_VERSION = "v21.0";
 
 // Initialize Supabase
@@ -38,6 +41,9 @@ if (!supabase) {
 // Express app
 const app = express();
 app.use(cookieParser());
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, '..', 'templates'));
+app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Store auth context by session ID
 const authContext = new Map<string, { userId: string; token: string }>();
@@ -350,7 +356,6 @@ app.get("/health", (req, res) => {
 app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
   console.log("📋 OAuth metadata requested for /mcp-api/sse");
   res.header("Access-Control-Allow-Origin", "*");
-  const baseUrl = process.env.BASE_URL || `https://drivenmetrics-mcp.onrender.com`;
   res.json({
     resource: `${baseUrl}/mcp-api/sse`,
     oauth_authorization_server: baseUrl,
@@ -362,7 +367,6 @@ app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
 app.get("/.well-known/oauth-authorization-server", (req, res) => {
   console.log("📋 OAuth authorization server metadata requested");
   res.header("Access-Control-Allow-Origin", "*");
-  const baseUrl = process.env.BASE_URL || `https://drivenmetrics-mcp.onrender.com`;
   res.json({
     issuer: baseUrl,
     authorization_endpoint: `${baseUrl}/authorize`,
@@ -464,39 +468,12 @@ app.get("/authorize", (req, res) => {
     scope
   });
   
-  // Show login page
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Login - Drivenmetrics MCP</title>
-      <style>
-        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5; }
-        .login-box { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); width: 300px; }
-        h2 { text-align: center; margin-bottom: 1.5rem; }
-        input { width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #ddd; border-radius: 4px; }
-        button { width: 100%; padding: 0.75rem; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        .demo-note { margin-top: 1rem; padding: 1rem; background: #f0f8ff; border-radius: 4px; font-size: 0.9rem; }
-      </style>
-    </head>
-    <body>
-      <div class="login-box">
-        <h2>Login to Drivenmetrics</h2>
-        <form method="POST" action="/login">
-          <input type="hidden" name="state" value="${stateId}">
-          <input type="email" name="email" placeholder="Email" required>
-          <input type="password" name="password" placeholder="Password" required>
-          <button type="submit">Login</button>
-        </form>
-        <div class="demo-note">
-          <strong>Demo Mode:</strong><br>
-          Use any email/password to login in demo mode.
-        </div>
-      </div>
-    </body>
-    </html>
-  `);
+  // Show login page using template
+  res.render('login_oauth', {
+    oauth_state: stateId,
+    next_url: null,
+    error: null
+  });
 });
 
 // Login endpoint
@@ -546,7 +523,8 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
   // Get OAuth state
   const oauthState = oauthStates.get(state);
   if (!oauthState) {
-    return res.redirect('/');
+    // Regular login without OAuth flow
+    return res.redirect(req.body.next_url || '/');
   }
   
   // Generate authorization code
@@ -622,15 +600,151 @@ app.post("/token", express.urlencoded({ extended: true }), async (req, res) => {
   });
 });
 
+// Standalone login page
+app.get("/login", (req, res) => {
+  res.render('login_oauth', {
+    oauth_state: null,
+    next_url: req.query.next || '/',
+    error: null
+  });
+});
+
 // Legacy endpoint redirects
 app.get("/mcp-api/sse", (req, res) => {
   res.redirect("/mcp-api");
+});
+
+// Define base URL for all routes
+const baseUrl = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? `https://drivenmetrics-mcp.onrender.com` : `http://localhost:${PORT}`);
+
+// Home page
+app.get("/", (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  const session = sessionId ? sessions.get(sessionId) : null;
+  
+  res.render('index', {
+    user: session
+  });
+});
+
+// Setup integrations page
+app.get("/setup/integrations", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.redirect('/login');
+  }
+  
+  const session = sessions.get(sessionId);
+  const userId = session.user_id;
+  
+  // Check if user has Facebook token
+  let hasFacebook = false;
+  if (supabase) {
+    try {
+      const { data } = await supabase
+        .from("facebook_tokens")
+        .select("access_token")
+        .eq("user_id", userId)
+        .eq("service", "competition")
+        .single();
+      hasFacebook = !!data;
+    } catch (error) {
+      console.log("No Facebook token found");
+    }
+  }
+  
+  const fbRedirectUri = `${baseUrl}/api/authorise/facebook/callback`;
+  
+  res.render('setup_integrations', {
+    user: session,
+    has_facebook: hasFacebook,
+    oauth_state: req.query.oauth_state,
+    pending_oauth: false,
+    fb_app_id: FB_APP_ID,
+    fb_redirect_uri: fbRedirectUri
+  });
+});
+
+// Facebook OAuth callback
+app.get("/api/authorise/facebook/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+  
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.redirect('/login');
+  }
+  
+  const session = sessions.get(sessionId);
+  const userId = session.user_id;
+  
+  if (error) {
+    console.error("Facebook auth error:", error);
+    return res.redirect("/setup/integrations?error=facebook_denied");
+  }
+  
+  if (code && FB_APP_ID && FB_APP_SECRET) {
+    try {
+      // Exchange code for token
+      const tokenResponse = await axios.get(
+        `https://graph.facebook.com/${FB_GRAPH_VERSION}/oauth/access_token`,
+        {
+          params: {
+            client_id: FB_APP_ID,
+            client_secret: FB_APP_SECRET,
+            redirect_uri: `${baseUrl}/api/authorise/facebook/callback`,
+            code: code
+          }
+        }
+      );
+      
+      const { access_token } = tokenResponse.data;
+      
+      if (access_token && supabase) {
+        // Save Facebook token
+        await supabase
+          .from("facebook_tokens")
+          .upsert({
+            user_id: userId,
+            access_token: access_token,
+            service: "competition",
+            updated_at: new Date().toISOString()
+          });
+        
+        console.log("✅ Facebook token saved for user:", userId);
+      }
+      
+      return res.redirect("/setup/integrations?success=facebook");
+    } catch (error) {
+      console.error("Facebook token exchange error:", error);
+      return res.redirect("/setup/integrations?error=facebook_failed");
+    }
+  }
+  
+  return res.redirect("/setup/integrations");
+});
+
+// Complete OAuth flow from integrations page
+app.post("/api/oauth/complete", express.urlencoded({ extended: true }), async (req, res) => {
+  const { oauth_state } = req.body;
+  
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const oauthData = oauthStates.get(oauth_state);
+  if (!oauthData) {
+    return res.status(400).json({ error: "Invalid OAuth state" });
+  }
+  
+  // Redirect back to authorize to complete the OAuth flow
+  res.redirect(`/authorize?state=${oauth_state}`);
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 MCP Server running on port ${PORT}`);
   console.log(`📡 MCP endpoint: http://localhost:${PORT}/mcp-api`);
-  console.log(`🔐 OAuth server: https://auth.drivenmetrics.com`);
+  console.log(`🔐 OAuth server: ${baseUrl}`);
   console.log(`✅ Ready for Claude.ai connections!`);
 });
