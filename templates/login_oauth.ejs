@@ -144,7 +144,7 @@
             <button type="submit">Sign In</button>
         </form>
         
-        <% if (!supabase) { %>
+        <% if (typeof supabase === 'undefined' || !supabase) { %>
         <div class="demo-note">
             <strong>Demo Mode Active</strong><br>
             Use any email and password to sign in.

@@ -481,12 +481,47 @@ app.get("/authorize", (req, res) => {
     scope
   });
   
-  // Show login page using template
-  res.render('login_oauth', {
-    oauth_state: stateId,
-    next_url: null,
-    error: null
-  });
+  // Show login page using template or fallback
+  try {
+    res.render('login_oauth', {
+      oauth_state: stateId,
+      next_url: null,
+      error: null,
+      supabase: !!supabase
+    });
+  } catch (err) {
+    console.error('OAuth login template error:', err);
+    // Fallback HTML for OAuth flow
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Authorize - Drivenmetrics</title>
+        <style>
+          body { font-family: sans-serif; background: #0a0a0a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+          .login-box { background: #1a1a1a; padding: 2rem; border-radius: 12px; width: 300px; }
+          h2 { text-align: center; }
+          input { width: 100%; padding: 0.75rem; margin: 0.5rem 0; border: 1px solid #333; background: #0a0a0a; color: white; border-radius: 4px; box-sizing: border-box; }
+          button { width: 100%; padding: 0.75rem; background: #0066ff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+          .info { text-align: center; margin-top: 1rem; color: #666; font-size: 0.9rem; }
+        </style>
+      </head>
+      <body>
+        <div class="login-box">
+          <h2>Sign in to Drivenmetrics</h2>
+          <p style="text-align: center; color: #999;">Authorize Claude.ai to access your account</p>
+          <form method="POST" action="/login">
+            <input type="hidden" name="state" value="${stateId}">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Authorize</button>
+          </form>
+          ${!supabase ? '<div class="info">Demo mode: Use any email/password</div>' : ''}
+        </div>
+      </body>
+      </html>
+    `);
+  }
 });
 
 // Login endpoint
@@ -615,11 +650,46 @@ app.post("/token", express.urlencoded({ extended: true }), async (req, res) => {
 
 // Standalone login page
 app.get("/login", (req, res) => {
-  res.render('login_oauth', {
-    oauth_state: null,
-    next_url: req.query.next || '/',
-    error: null
-  });
+  try {
+    res.render('login_oauth', {
+      oauth_state: null,
+      next_url: req.query.next || '/',
+      error: null,
+      supabase: !!supabase
+    });
+  } catch (err) {
+    console.error('Template render error:', err);
+    // Fallback HTML if template fails
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Login - Drivenmetrics</title>
+        <style>
+          body { font-family: sans-serif; background: #0a0a0a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+          .login-box { background: #1a1a1a; padding: 2rem; border-radius: 12px; width: 300px; }
+          input { width: 100%; padding: 0.75rem; margin: 0.5rem 0; border: 1px solid #333; background: #0a0a0a; color: white; border-radius: 4px; }
+          button { width: 100%; padding: 0.75rem; background: #0066ff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+          button:hover { background: #0052cc; }
+          .info { text-align: center; margin-top: 1rem; color: #666; font-size: 0.9rem; }
+        </style>
+      </head>
+      <body>
+        <div class="login-box">
+          <h2>Login to Drivenmetrics</h2>
+          <form method="POST" action="/login">
+            <input type="hidden" name="state" value="">
+            <input type="hidden" name="next_url" value="${req.query.next || '/'}">
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <button type="submit">Sign In</button>
+          </form>
+          ${!supabase ? '<div class="info">Demo mode: Use any email/password</div>' : ''}
+        </div>
+      </body>
+      </html>
+    `);
+  }
 });
 
 // Legacy endpoint redirects
@@ -635,9 +705,23 @@ app.get("/", (req, res) => {
   const sessionId = req.cookies?.session_id;
   const session = sessionId ? sessions.get(sessionId) : null;
   
-  res.render('index', {
-    user: session
-  });
+  try {
+    res.render('index', {
+      user: session
+    });
+  } catch (err) {
+    // Fallback to JSON response if template fails
+    res.json({
+      service: "drivenmetrics-mcp",
+      status: "running",
+      endpoints: {
+        mcp: "/mcp-api",
+        health: "/health",
+        oauth_metadata: "/.well-known/oauth-protected-resource/mcp-api/sse"
+      },
+      user: session ? { email: session.email } : null
+    });
+  }
 });
 
 // Setup integrations page
