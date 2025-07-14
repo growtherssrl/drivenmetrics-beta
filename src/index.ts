@@ -25,6 +25,19 @@ const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPAB
 const app = express();
 app.use(express.json());
 
+// CORS configuration
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header("Access-Control-Allow-Credentials", "true");
+  
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  next();
+});
+
 // MCP Server
 const mcpServer = new Server(
   {
@@ -176,18 +189,18 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!fbToken) {
           result = { error: "Facebook authentication required" };
         } else {
-          const params = {
+          const params: any = {
             ad_type: "POLITICAL_AND_ISSUE_ADS",
             ad_active_status: "ALL",
-            search_terms: args.keywords,
-            limit: args.limit || 10,
+            search_terms: args?.keywords || "",
+            limit: args?.limit || 10,
           };
-          if (args.country !== "ALL") {
+          if (args?.country && args.country !== "ALL") {
             params.ad_reached_countries = args.country;
           }
           const fbResult = await fetchAdsFromFacebook(params, fbToken);
           result = fbResult.error ? fbResult : {
-            keywords: args.keywords,
+            keywords: args?.keywords || "",
             ads_found: fbResult.data?.length || 0,
             ads: fbResult.data || [],
           };
@@ -201,12 +214,12 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
           const params = {
             ad_type: "POLITICAL_AND_ISSUE_ADS",
             ad_active_status: "ALL",
-            search_page_ids: args.page_id,
-            limit: args.limit || 25,
+            search_page_ids: args?.page_id || "",
+            limit: args?.limit || 25,
           };
           const fbResult = await fetchAdsFromFacebook(params, fbToken);
           result = fbResult.error ? fbResult : {
-            page_id: args.page_id,
+            page_id: args?.page_id || "",
             ads_found: fbResult.data?.length || 0,
             ads: fbResult.data || [],
           };
@@ -238,19 +251,73 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
 });
 
 // Express routes
+app.get("/", (req, res) => {
+  res.json({ 
+    service: "drivenmetrics-mcp",
+    status: "running",
+    endpoints: {
+      sse: "/mcp-api/sse",
+      messages: "/mcp-api/messages",
+      health: "/health",
+      oauth_metadata: "/.well-known/oauth-protected-resource/mcp-api/sse"
+    }
+  });
+});
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "drivenmetrics-mcp" });
 });
 
-// SSE endpoint
-app.get("/sse", async (req, res) => {
-  console.log("📡 SSE connection established");
+// OAuth metadata endpoints
+app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
+  console.log("📋 OAuth metadata requested for /mcp-api/sse");
+  res.json({
+    resource: `${process.env.BASE_URL || `https://drivenmetrics-mcp.onrender.com`}/mcp-api/sse`,
+    oauth_authorization_server: "https://auth.drivenmetrics.com",
+    oauth_scopes_supported: ["mcp"],
+    mcp_version: "2024-11-05"
+  });
+});
+
+app.get("/.well-known/oauth-authorization-server", (req, res) => {
+  console.log("📋 OAuth authorization server metadata requested");
+  res.json({
+    issuer: "https://auth.drivenmetrics.com",
+    authorization_endpoint: "https://auth.drivenmetrics.com/authorize",
+    token_endpoint: "https://auth.drivenmetrics.com/token",
+    token_endpoint_auth_methods_supported: ["none"],
+    response_types_supported: ["code"],
+    scopes_supported: ["mcp"],
+    code_challenge_methods_supported: ["S256"],
+    grant_types_supported: ["authorization_code"]
+  });
+});
+
+// SSE endpoint - Claude.ai expects /mcp-api/sse
+app.get("/mcp-api/sse", async (req, res) => {
+  console.log("📡 SSE connection request on /mcp-api/sse");
+  console.log("Headers:", req.headers);
   
   // Extract auth token from headers
   const authHeader = req.headers.authorization;
   const authToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   
-  sseTransport = new SSEServerTransport("/messages", res);
+  if (authToken) {
+    console.log("🔐 Auth token provided:", authToken.substring(0, 10) + "...");
+  }
+  
+  // Set SSE headers
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no"
+  });
+  
+  // Send initial comment
+  res.write(":ok\n\n");
+  
+  sseTransport = new SSEServerTransport("/mcp-api/messages", res);
   await mcpServer.connect(sseTransport);
   
   res.on("close", () => {
@@ -259,8 +326,14 @@ app.get("/sse", async (req, res) => {
   });
 });
 
-// Messages endpoint
-app.post("/messages", async (req, res) => {
+// Legacy SSE endpoint redirect
+app.get("/sse", (req, res) => {
+  res.redirect("/mcp-api/sse");
+});
+
+// Messages endpoint - Claude.ai expects /mcp-api/messages
+app.post("/mcp-api/messages", async (req, res) => {
+  console.log("💬 Message received on /mcp-api/messages");
   if (!sseTransport) {
     return res.status(400).json({ error: "No active SSE connection" });
   }
@@ -278,7 +351,7 @@ app.post("/messages", async (req, res) => {
       },
     };
     
-    await sseTransport.handlePostMessage(messageWithAuth);
+    await (sseTransport as any).handlePostMessage(messageWithAuth);
     res.json({ success: true });
   } catch (error) {
     console.error("Message error:", error);
@@ -286,9 +359,16 @@ app.post("/messages", async (req, res) => {
   }
 });
 
+// Legacy messages endpoint redirect
+app.post("/messages", (req, res) => {
+  res.redirect(307, "/mcp-api/messages");
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 MCP Server running on port ${PORT}`);
-  console.log(`📡 SSE endpoint: http://localhost:${PORT}/sse`);
-  console.log(`💬 Messages endpoint: http://localhost:${PORT}/messages`);
+  console.log(`📡 SSE endpoint: http://localhost:${PORT}/mcp-api/sse`);
+  console.log(`💬 Messages endpoint: http://localhost:${PORT}/mcp-api/messages`);
+  console.log(`🔐 OAuth server: https://auth.drivenmetrics.com`);
+  console.log(`✅ Ready for Claude.ai connections!`);
 });
