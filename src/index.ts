@@ -25,17 +25,13 @@ const supabase = SUPABASE_URL && SUPABASE_KEY ? createClient(SUPABASE_URL, SUPAB
 const app = express();
 app.use(express.json());
 
-// CORS configuration
-app.use((req, res, next) => {
+// Global CORS handler for OPTIONS requests
+app.options("*", (req, res) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Access-Control-Allow-Credentials", "true");
-  
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-  next();
+  res.status(200).end();
 });
 
 // MCP Server
@@ -252,6 +248,7 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request) => {
 
 // Express routes
 app.get("/", (req, res) => {
+  res.header("Access-Control-Allow-Origin", "*");
   res.json({ 
     service: "drivenmetrics-mcp",
     status: "running",
@@ -271,6 +268,7 @@ app.get("/health", (req, res) => {
 // OAuth metadata endpoints
 app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
   console.log("📋 OAuth metadata requested for /mcp-api/sse");
+  res.header("Access-Control-Allow-Origin", "*");
   res.json({
     resource: `${process.env.BASE_URL || `https://drivenmetrics-mcp.onrender.com`}/mcp-api/sse`,
     oauth_authorization_server: "https://auth.drivenmetrics.com",
@@ -281,6 +279,7 @@ app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
 
 app.get("/.well-known/oauth-authorization-server", (req, res) => {
   console.log("📋 OAuth authorization server metadata requested");
+  res.header("Access-Control-Allow-Origin", "*");
   res.json({
     issuer: "https://auth.drivenmetrics.com",
     authorization_endpoint: "https://auth.drivenmetrics.com/authorize",
@@ -306,19 +305,17 @@ app.get("/mcp-api/sse", async (req, res) => {
     console.log("🔐 Auth token provided:", authToken.substring(0, 10) + "...");
   }
   
-  // Set SSE headers
-  res.writeHead(200, {
-    "Content-Type": "text/event-stream",
-    "Cache-Control": "no-cache",
-    "Connection": "keep-alive",
-    "X-Accel-Buffering": "no"
-  });
-  
-  // Send initial comment
-  res.write(":ok\n\n");
-  
-  sseTransport = new SSEServerTransport("/mcp-api/messages", res);
-  await mcpServer.connect(sseTransport);
+  try {
+    // Create SSE transport - it will handle setting headers
+    sseTransport = new SSEServerTransport("/mcp-api/messages", res);
+    await mcpServer.connect(sseTransport);
+    console.log("✅ SSE connection established");
+  } catch (error) {
+    console.error("❌ SSE connection error:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to establish SSE connection" });
+    }
+  }
   
   res.on("close", () => {
     console.log("📡 SSE connection closed");
