@@ -95,6 +95,16 @@
             font-size: 14px;
         }
         
+        .success {
+            background: #10b98133;
+            border: 1px solid #4ade80;
+            color: #4ade80;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
         .info {
             text-align: center;
             margin-top: 24px;
@@ -111,6 +121,23 @@
             font-size: 14px;
             color: #66b3ff;
         }
+        
+        .toggle-mode {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .toggle-mode a {
+            color: #0066ff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .toggle-mode a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -125,8 +152,15 @@
         </div>
         <% } %>
         
-        <form method="POST" action="/login">
+        <% if (locals.message) { %>
+        <div class="success">
+            <%= message %>
+        </div>
+        <% } %>
+        
+        <form id="authForm" method="POST" action="/login">
             <input type="hidden" name="state" value="<%= oauth_state %>">
+            <input type="hidden" name="mode" id="authMode" value="login">
             <% if (locals.next_url) { %>
             <input type="hidden" name="next_url" value="<%= next_url %>">
             <% } %>
@@ -141,8 +175,13 @@
                 <input type="password" id="password" name="password" required>
             </div>
             
-            <button type="submit">Sign In</button>
+            <button type="submit" id="submitButton">Sign In</button>
         </form>
+        
+        <div class="toggle-mode">
+            <span id="toggleText">Don't have an account?</span>
+            <a href="#" onclick="toggleMode(event)" id="toggleLink">Sign Up</a>
+        </div>
         
         <% if (typeof supabase === 'undefined' || !supabase) { %>
         <div class="demo-note">
@@ -155,5 +194,28 @@
             Connecting to Claude.ai MCP Server
         </div>
     </div>
+    
+    <script>
+        function toggleMode(e) {
+            e.preventDefault();
+            const form = document.getElementById('authForm');
+            const modeInput = document.getElementById('authMode');
+            const submitButton = document.getElementById('submitButton');
+            const toggleText = document.getElementById('toggleText');
+            const toggleLink = document.getElementById('toggleLink');
+            
+            if (modeInput.value === 'login') {
+                modeInput.value = 'register';
+                submitButton.textContent = 'Sign Up';
+                toggleText.textContent = 'Already have an account?';
+                toggleLink.textContent = 'Sign In';
+            } else {
+                modeInput.value = 'login';
+                submitButton.textContent = 'Sign In';
+                toggleText.textContent = "Don't have an account?";
+                toggleLink.textContent = 'Sign Up';
+            }
+        }
+    </script>
 </body>
 </html>

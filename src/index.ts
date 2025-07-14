@@ -526,31 +526,87 @@ app.get("/authorize", (req, res) => {
 
 // Login endpoint
 app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
-  const { email, password, state } = req.body;
+  const { email, password, state, mode } = req.body;
   
-  console.log("🔐 Login attempt:", { email, state });
+  console.log("🔐 Auth attempt:", { email, state, mode: mode || 'login' });
   
   // In demo mode or with Supabase
   let userId = null;
+  let isNewUser = false;
   
   if (supabase) {
     // Real authentication with Supabase
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (data?.user) {
-        userId = data.user.id;
+      if (mode === 'register') {
+        // Registration
+        const { data, error } = await supabase.auth.signUp({ 
+          email, 
+          password,
+          options: {
+            emailRedirectTo: `${baseUrl}/auth/confirm`
+          }
+        });
+        if (error) {
+          console.error("Registration error:", error);
+          return res.render('login_oauth', {
+            oauth_state: state,
+            next_url: req.body.next_url,
+            error: error.message,
+            supabase: !!supabase
+          });
+        }
+        if (data?.user) {
+          userId = data.user.id;
+          isNewUser = true;
+        }
+      } else {
+        // Login
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) {
+          console.error("Login error:", error);
+          return res.render('login_oauth', {
+            oauth_state: state,
+            next_url: req.body.next_url,
+            error: error.message,
+            supabase: !!supabase
+          });
+        }
+        if (data?.user) {
+          userId = data.user.id;
+        }
       }
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("Auth error:", error);
+      return res.render('login_oauth', {
+        oauth_state: state,
+        next_url: req.body.next_url,
+        error: "Authentication failed",
+        supabase: !!supabase
+      });
     }
   } else {
     // Demo mode - accept any credentials
     userId = `demo_${email}`;
-    console.log("🎮 Demo mode login:", userId);
+    console.log("🎮 Demo mode auth:", userId);
   }
   
   if (!userId) {
-    return res.status(401).send("Invalid credentials");
+    return res.render('login_oauth', {
+      oauth_state: state,
+      next_url: req.body.next_url,
+      error: "Invalid credentials",
+      supabase: !!supabase
+    });
+  }
+  
+  // If registration and confirmation required
+  if (isNewUser && supabase) {
+    return res.render('login_oauth', {
+      oauth_state: state,
+      next_url: req.body.next_url,
+      message: "Registration successful! Please check your email to confirm your account.",
+      supabase: !!supabase
+    });
   }
   
   // Create session
@@ -572,7 +628,7 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
   const oauthState = oauthStates.get(state);
   if (!oauthState) {
     // Regular login without OAuth flow
-    return res.redirect(req.body.next_url || '/');
+    return res.redirect(req.body.next_url || '/setup/integrations');
   }
   
   // Generate authorization code
@@ -591,7 +647,7 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
   redirectUrl.searchParams.set('code', authCode);
   redirectUrl.searchParams.set('state', oauthState.state);
   
-  console.log("✅ Login successful, redirecting with code");
+  console.log("✅ Auth successful, redirecting with code");
   res.redirect(redirectUrl.toString());
 });
 
@@ -728,7 +784,7 @@ app.get("/", (req, res) => {
 app.get("/setup/integrations", async (req, res) => {
   const sessionId = req.cookies?.session_id;
   if (!sessionId || !sessions.has(sessionId)) {
-    return res.redirect('/login');
+    return res.redirect('/login?next=/setup/integrations');
   }
   
   const session = sessions.get(sessionId);
@@ -748,23 +804,113 @@ app.get("/setup/integrations", async (req, res) => {
     } catch (error) {
       console.log("No Facebook token found");
     }
+  } else {
+    // Demo mode - simulate Facebook connected
+    hasFacebook = true;
   }
   
   const fbRedirectUri = `${baseUrl}/api/authorise/facebook/callback`;
   
-  res.render('setup_integrations', {
-    user: session,
-    has_facebook: hasFacebook,
-    oauth_state: req.query.oauth_state,
-    pending_oauth: false,
-    fb_app_id: FB_APP_ID,
-    fb_redirect_uri: fbRedirectUri
+  try {
+    res.render('setup_integrations', {
+      user: session,
+      has_facebook: hasFacebook,
+      oauth_state: req.query.oauth_state,
+      success: req.query.success,
+      error: req.query.error,
+      fb_app_id: FB_APP_ID,
+      fb_redirect_uri: fbRedirectUri
+    });
+  } catch (err) {
+    console.error('Template render error:', err);
+    // Fallback HTML
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Integrations - Drivenmetrics</title>
+        <style>
+          body { font-family: sans-serif; background: #0a0a0a; color: white; padding: 20px; }
+          .container { max-width: 800px; margin: 0 auto; }
+          .card { background: #1a1a1a; padding: 20px; border-radius: 12px; margin: 20px 0; }
+          button { background: #0066ff; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+          .success { color: #4ade80; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Integrations</h1>
+          ${req.query.oauth_state ? `
+            <div class="card">
+              <h2>✅ Ready to Connect with Claude.ai</h2>
+              <p>Your account is set up. Click below to complete the connection.</p>
+              <button onclick="window.location.href='/api/complete-oauth/${req.query.oauth_state}'">
+                Continue with Claude AI
+              </button>
+            </div>
+          ` : ''}
+          <div class="card">
+            <h2>Facebook Ads ${hasFacebook ? '<span class="success">✓ Connected</span>' : '❌ Not Connected'}</h2>
+            ${!hasFacebook && FB_APP_ID ? `
+              <button onclick="window.location.href='/api/authorise/facebook/start'">
+                Connect Facebook
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
+// Facebook OAuth start
+app.get("/api/authorise/facebook/start", (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.redirect('/login?next=/api/authorise/facebook/start');
+  }
+  
+  if (!FB_APP_ID) {
+    return res.status(500).send("Facebook App ID not configured");
+  }
+  
+  // Generate state for CSRF protection
+  const fbState = crypto.randomBytes(16).toString('hex');
+  
+  // Store state linked to session, including any pending OAuth state
+  oauthStates.set(fbState, {
+    session_id: sessionId,
+    type: 'facebook',
+    created_at: Date.now(),
+    pending_oauth_state: req.query.oauth_state // Preserve OAuth state for Claude.ai
   });
+  
+  // Build Facebook OAuth URL
+  const params = new URLSearchParams({
+    client_id: FB_APP_ID,
+    redirect_uri: `${baseUrl}/api/authorise/facebook/callback`,
+    scope: 'ads_read',
+    state: fbState,
+    response_type: 'code'
+  });
+  
+  const fbAuthUrl = `https://www.facebook.com/v${FB_GRAPH_VERSION}/dialog/oauth?${params}`;
+  console.log("🔐 Redirecting to Facebook OAuth:", fbAuthUrl);
+  
+  res.redirect(fbAuthUrl);
 });
 
 // Facebook OAuth callback
 app.get("/api/authorise/facebook/callback", async (req, res) => {
   const { code, state, error } = req.query;
+  
+  // Verify state
+  const stateData = oauthStates.get(state as string);
+  if (!stateData || stateData.type !== 'facebook') {
+    console.error("Invalid Facebook OAuth state");
+    return res.redirect("/setup/integrations?error=invalid_state");
+  }
   
   const sessionId = req.cookies?.session_id;
   if (!sessionId || !sessions.has(sessionId)) {
@@ -773,6 +919,9 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
   
   const session = sessions.get(sessionId);
   const userId = session.user_id;
+  
+  // Clean up state
+  oauthStates.delete(state as string);
   
   if (error) {
     console.error("Facebook auth error:", error);
@@ -810,6 +959,12 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
         console.log("✅ Facebook token saved for user:", userId);
       }
       
+      // Check if there's a pending OAuth flow from the original state
+      const pendingOauth = stateData.pending_oauth_state;
+      if (pendingOauth) {
+        return res.redirect(`/setup/integrations?success=facebook&oauth_state=${pendingOauth}`);
+      }
+      
       return res.redirect("/setup/integrations?success=facebook");
     } catch (error) {
       console.error("Facebook token exchange error:", error);
@@ -821,21 +976,41 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
 });
 
 // Complete OAuth flow from integrations page
-app.post("/api/oauth/complete", express.urlencoded({ extended: true }), async (req, res) => {
-  const { oauth_state } = req.body;
+app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
+  const { oauth_state } = req.params;
   
   const sessionId = req.cookies?.session_id;
   if (!sessionId || !sessions.has(sessionId)) {
-    return res.status(401).json({ error: "Not authenticated" });
+    return res.redirect('/login');
   }
   
+  const session = sessions.get(sessionId);
   const oauthData = oauthStates.get(oauth_state);
+  
   if (!oauthData) {
-    return res.status(400).json({ error: "Invalid OAuth state" });
+    return res.status(400).send("Invalid OAuth state");
   }
   
-  // Redirect back to authorize to complete the OAuth flow
-  res.redirect(`/authorize?state=${oauth_state}`);
+  // Generate authorization code for Claude
+  const authCode = crypto.randomBytes(32).toString('hex');
+  
+  // Store auth code with user info
+  oauthStates.set(authCode, {
+    ...oauthData,
+    user_id: session.user_id,
+    created_at: Date.now()
+  });
+  
+  // Clean up original state
+  oauthStates.delete(oauth_state);
+  
+  // Redirect back to Claude with auth code
+  const redirectUrl = new URL(oauthData.redirect_uri);
+  redirectUrl.searchParams.set('code', authCode);
+  redirectUrl.searchParams.set('state', oauthData.state);
+  
+  console.log("✅ Completing OAuth flow, redirecting to Claude.ai");
+  res.redirect(redirectUrl.toString());
 });
 
 // Error handling middleware

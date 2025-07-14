@@ -47,13 +47,38 @@
             border-radius: 8px;
             cursor: pointer;
             font-size: 16px;
+            margin-right: 10px;
         }
         button:hover {
             background: #0052cc;
         }
+        button.primary {
+            background: #4ade80;
+            color: #0a0a0a;
+            font-weight: 600;
+        }
+        button.primary:hover {
+            background: #22c55e;
+        }
         .oauth-pending {
-            background: #f59e0b33;
-            border: 1px solid #f59e0b;
+            background: #0066ff33;
+            border: 1px solid #0066ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .success-message {
+            background: #10b98133;
+            border: 1px solid #4ade80;
+            color: #4ade80;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .error-message {
+            background: #ef444433;
+            border: 1px solid #f87171;
+            color: #f87171;
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
@@ -72,14 +97,36 @@
         
         <h1>Integrations</h1>
         
-        <% if (oauth_state) { %>
+        <% if (locals.success === 'facebook') { %>
+        <div class="success-message">
+            <h3>✅ Facebook Connected Successfully!</h3>
+            <p>Your Facebook account has been connected. You can now use the Facebook Ads tools.</p>
+        </div>
+        <% } %>
+        
+        <% if (locals.error) { %>
+        <div class="error-message">
+            <h3>❌ Connection Error</h3>
+            <p><%= locals.error === 'facebook_denied' ? 'Facebook authorization was denied.' : 
+                   locals.error === 'facebook_failed' ? 'Failed to connect to Facebook. Please try again.' :
+                   locals.error === 'invalid_state' ? 'Invalid request. Please try again.' :
+                   'An error occurred. Please try again.' %></p>
+        </div>
+        <% } %>
+        
+        <% if (oauth_state && has_facebook) { %>
         <div class="oauth-pending">
-            <h3>OAuth Integration Pending</h3>
-            <p>Complete the OAuth flow to grant Claude.ai access to your account.</p>
-            <form method="POST" action="/api/oauth/complete">
-                <input type="hidden" name="oauth_state" value="<%= oauth_state %>">
-                <button type="submit">Complete OAuth Setup</button>
-            </form>
+            <h3>✅ Ready to Connect with Claude.ai</h3>
+            <p>Your account is set up and ready. Click below to complete the connection with Claude.ai.</p>
+            <button onclick="window.location.href='/api/complete-oauth/<%= oauth_state %>'" class="primary">
+                Continue with Claude AI
+            </button>
+        </div>
+        <% } else if (oauth_state && !has_facebook) { %>
+        <div class="oauth-pending">
+            <h3>⚠️ Facebook Connection Required</h3>
+            <p>Please connect your Facebook account first to use Drivenmetrics with Claude.ai.</p>
+            <p>After connecting Facebook, you'll be able to complete the Claude.ai integration.</p>
         </div>
         <% } %>
         
@@ -97,19 +144,9 @@
             <% } else { %>
                 <p>Connect your Facebook account to enable competitor ad analysis.</p>
                 <% if (fb_app_id) { %>
-                    <button onclick="connectFacebook()">Connect Facebook</button>
-                    
-                    <script>
-                        function connectFacebook() {
-                            const fbAuthUrl = 'https://www.facebook.com/dialog/oauth?' + new URLSearchParams({
-                                client_id: '<%= fb_app_id %>',
-                                redirect_uri: '<%= fb_redirect_uri %>',
-                                scope: 'ads_read',
-                                state: 'fb_' + Date.now()
-                            });
-                            window.location.href = fbAuthUrl;
-                        }
-                    </script>
+                    <button onclick="window.location.href='/api/authorise/facebook/start<%= oauth_state ? '?oauth_state=' + oauth_state : '' %>'">
+                        Connect Facebook
+                    </button>
                 <% } else { %>
                     <p style="color: #f87171;">Facebook App ID not configured. Please set FB_APP_ID environment variable.</p>
                 <% } %>
