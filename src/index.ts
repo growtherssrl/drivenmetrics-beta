@@ -377,8 +377,36 @@ app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
   });
 });
 
+// OAuth metadata for /mcp-api endpoint
+app.get("/.well-known/oauth-protected-resource/mcp-api", (req, res) => {
+  console.log("📋 OAuth metadata requested for /mcp-api");
+  res.header("Access-Control-Allow-Origin", "*");
+  res.json({
+    resource: `${baseUrl}/mcp-api`,
+    oauth_authorization_server: baseUrl,
+    oauth_scopes_supported: ["mcp"],
+    mcp_version: "2024-11-05"
+  });
+});
+
 app.get("/.well-known/oauth-authorization-server", (req, res) => {
   console.log("📋 OAuth authorization server metadata requested");
+  res.header("Access-Control-Allow-Origin", "*");
+  res.json({
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/authorize`,
+    token_endpoint: `${baseUrl}/token`,
+    token_endpoint_auth_methods_supported: ["none"],
+    response_types_supported: ["code"],
+    scopes_supported: ["mcp"],
+    code_challenge_methods_supported: ["S256"],
+    grant_types_supported: ["authorization_code"]
+  });
+});
+
+// OAuth authorization server metadata with path
+app.get("/.well-known/oauth-authorization-server/mcp-api", (req, res) => {
+  console.log("📋 OAuth authorization server metadata requested for /mcp-api");
   res.header("Access-Control-Allow-Origin", "*");
   res.json({
     issuer: baseUrl,
