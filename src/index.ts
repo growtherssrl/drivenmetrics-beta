@@ -40,8 +40,9 @@ const app = express();
 // Add request logging middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  if (req.url.includes('well-known')) {
+  if (req.url.includes('well-known') || req.url.includes('authorize') || req.url.includes('token')) {
     console.log('Headers:', req.headers);
+    console.log('Query:', req.query);
   }
   next();
 });
@@ -339,7 +340,8 @@ const transport = new StreamableHTTPServerTransport({
 mcpServer.connect(transport);
 
 // Define base URL for all routes
-const baseUrl = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? `https://drivenmetrics-mcp.onrender.com` : `http://localhost:${PORT}`);
+const baseUrl = process.env.BASE_URL || (process.env.NODE_ENV === 'production' ? `https://mcp.drivenmetrics.com` : `http://localhost:${PORT}`);
+console.log("🔗 Base URL configured as:", baseUrl);
 
 // Global CORS handler for OPTIONS requests
 app.options("*", (req, res) => {
@@ -372,49 +374,50 @@ app.get("/.well-known/oauth-protected-resource/mcp-api", (req, res) => {
   console.log("📋 OAuth metadata requested for /mcp-api");
   console.log("Request headers:", req.headers);
   console.log("Request URL:", req.url);
+  console.log("Base URL:", baseUrl);
   
-  res.header("Access-Control-Allow-Origin", "*");
-  res.json({
+  const response = {
     resource: `${baseUrl}/mcp-api`,
     oauth_authorization_server: baseUrl,
     oauth_scopes_supported: ["mcp"]
-  });
+  };
+  
+  console.log("Sending OAuth metadata response:", response);
+  
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.json(response);
 });
 
 app.get("/.well-known/oauth-authorization-server", (req, res) => {
   console.log("📋 OAuth authorization server metadata requested");
   console.log("Request headers:", req.headers);
+  console.log("Base URL:", baseUrl);
+  
+  const response = {
+    issuer: baseUrl,
+    authorization_endpoint: `${baseUrl}/authorize`,
+    token_endpoint: `${baseUrl}/token`,
+    token_endpoint_auth_methods_supported: ["none"],
+    response_types_supported: ["code"],
+    scopes_supported: ["mcp"],
+    code_challenge_methods_supported: ["S256"],
+    grant_types_supported: ["authorization_code"]
+  };
+  
+  console.log("Sending authorization server metadata:", response);
   
   res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Content-Type", "application/json");
   
-  res.json({
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/authorize`,
-    token_endpoint: `${baseUrl}/token`,
-    token_endpoint_auth_methods_supported: ["none"],
-    response_types_supported: ["code"],
-    scopes_supported: ["mcp"],
-    code_challenge_methods_supported: ["S256"],
-    grant_types_supported: ["authorization_code"]
-  });
+  res.json(response);
 });
 
-// OAuth authorization server metadata with path
-app.get("/.well-known/oauth-authorization-server/mcp-api", (req, res) => {
-  console.log("📋 OAuth authorization server metadata requested for /mcp-api");
-  res.header("Access-Control-Allow-Origin", "*");
-  res.json({
-    issuer: baseUrl,
-    authorization_endpoint: `${baseUrl}/authorize`,
-    token_endpoint: `${baseUrl}/token`,
-    token_endpoint_auth_methods_supported: ["none"],
-    response_types_supported: ["code"],
-    scopes_supported: ["mcp"],
-    code_challenge_methods_supported: ["S256"],
-    grant_types_supported: ["authorization_code"]
-  });
-});
+// Remove this endpoint - it might be confusing Claude
+// OAuth authorization server should only be at the root
 
 // Mount the MCP transport handler with authentication
 app.use("/mcp-api", express.json(), async (req, res, next) => {
@@ -1206,6 +1209,33 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
   }
   
   return res.redirect("/setup/integrations");
+});
+
+// Disconnect Facebook
+app.post("/api/disconnect-facebook", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const session = sessions.get(sessionId);
+  const userId = session.user_id;
+  
+  if (supabase) {
+    try {
+      await supabase
+        .from("facebook_tokens")
+        .delete()
+        .eq("user_id", userId)
+        .eq("service", "competition");
+      console.log("✅ Facebook token deleted for user:", userId);
+    } catch (error) {
+      console.error("Error deleting Facebook token:", error);
+      return res.status(500).json({ error: "Failed to disconnect Facebook" });
+    }
+  }
+  
+  res.json({ success: true, message: "Facebook disconnected successfully" });
 });
 
 // Complete OAuth flow from integrations page

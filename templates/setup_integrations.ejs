@@ -188,7 +188,7 @@
             <div style="background: #0a0a0a; padding: 16px; border-radius: 8px; margin-top: 12px;">
                 <code>
                     curl -H "Authorization: Bearer dmgt_demo_token" \<br>
-                    &nbsp;&nbsp;<%= process.env.NODE_ENV === 'production' ? 'https://drivenmetrics-mcp.onrender.com' : 'http://localhost:' + (process.env.PORT || 3000) %>/mcp-api
+                    &nbsp;&nbsp;<%= process.env.NODE_ENV === 'production' ? 'https://mcp.drivenmetrics.com' : 'http://localhost:' + (process.env.PORT || 3000) %>/mcp-api
                 </code>
             </div>
         </div>
@@ -221,9 +221,26 @@
         
         function disconnectFacebook() {
             if (confirm('Are you sure you want to disconnect Facebook? You will need to reconnect to use the ads tools.')) {
-                alert('To fully disconnect, please revoke access in your Facebook settings.');
-                // In a real implementation, we would call an API to delete the token
-                window.location.reload();
+                fetch('/api/disconnect-facebook', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'same-origin'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Facebook disconnected successfully. To fully revoke access, please also visit your Facebook settings.');
+                        window.location.reload();
+                    } else {
+                        alert('Error disconnecting Facebook. Please try again.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error disconnecting Facebook. Please try again.');
+                });
             }
         }
     </script>
