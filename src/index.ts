@@ -357,6 +357,113 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "drivenmetrics-mcp" });
 });
 
+// Test authentication endpoint
+app.get("/test-auth", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "No Bearer token provided" });
+  }
+  
+  const token = authHeader.slice(7);
+  const userId = await getUserByToken(token);
+  
+  if (!userId) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+  
+  res.json({ 
+    authenticated: true, 
+    user_id: userId,
+    token: token.substring(0, 10) + "..."
+  });
+});
+
+// Test OAuth flow endpoint
+app.get("/test-oauth", (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Test OAuth Flow</title>
+      <style>
+        body { font-family: sans-serif; padding: 20px; background: #0a0a0a; color: #fff; }
+        pre { background: #1a1a1a; padding: 15px; border-radius: 8px; overflow-x: auto; }
+        button { background: #0066ff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0052cc; }
+      </style>
+    </head>
+    <body>
+      <h1>Test OAuth Flow</h1>
+      <button onclick="testNoAuth()">1. Test Without Auth</button>
+      <button onclick="testMetadata()">2. Get OAuth Metadata</button>
+      <button onclick="testAuthServer()">3. Get Auth Server Metadata</button>
+      <button onclick="startOAuth()">4. Start OAuth Flow</button>
+      <pre id="output"></pre>
+      
+      <script>
+        const output = document.getElementById('output');
+        const baseUrl = window.location.origin;
+        
+        async function testNoAuth() {
+          const res = await fetch(baseUrl + '/mcp-api');
+          const headers = {};
+          res.headers.forEach((v, k) => headers[k] = v);
+          output.textContent = 'Status: ' + res.status + '\\n' +
+            'Headers: ' + JSON.stringify(headers, null, 2) + '\\n' +
+            'Body: ' + await res.text();
+        }
+        
+        async function testMetadata() {
+          const res = await fetch(baseUrl + '/.well-known/oauth-protected-resource/mcp-api');
+          output.textContent = 'OAuth Metadata:\\n' + JSON.stringify(await res.json(), null, 2);
+        }
+        
+        async function testAuthServer() {
+          const res = await fetch(baseUrl + '/.well-known/oauth-authorization-server');
+          output.textContent = 'Auth Server Metadata:\\n' + JSON.stringify(await res.json(), null, 2);
+        }
+        
+        function startOAuth() {
+          const state = Math.random().toString(36).substring(7);
+          const challenge = Math.random().toString(36).substring(7);
+          const params = new URLSearchParams({
+            response_type: 'code',
+            client_id: 'test-client',
+            redirect_uri: baseUrl + '/test-oauth',
+            state: state,
+            scope: 'mcp',
+            code_challenge: challenge,
+            code_challenge_method: 'S256'
+          });
+          window.location.href = baseUrl + '/authorize?' + params;
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// Root endpoint for OAuth flow
+app.get("/", (req, res) => {
+  console.log("🏠 Root endpoint accessed:", req.query);
+  // If this is part of OAuth flow, redirect to login
+  if (req.query.state || req.query.code) {
+    return res.redirect('/login');
+  }
+  res.json({ 
+    service: "Drivenmetrics MCP Server",
+    version: "1.0.0",
+    endpoints: {
+      mcp: "/mcp-api",
+      oauth: {
+        authorize: "/authorize",
+        token: "/token"
+      }
+    }
+  });
+});
+
 // OAuth metadata endpoints
 app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
   console.log("📋 OAuth metadata requested for /mcp-api/sse");
@@ -436,6 +543,8 @@ app.use("/mcp-api", express.json(), async (req, res, next) => {
   
   // Extract auth token from headers
   const authHeader = req.headers.authorization;
+  let isAuthenticated = false;
+  
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
     console.log("[AUTH] Token extracted:", token.substring(0, 10) + "...");
@@ -443,13 +552,37 @@ app.use("/mcp-api", express.json(), async (req, res, next) => {
     const userId = await getUserByToken(token);
     console.log("[AUTH] User ID from token:", userId || "Not found");
     
-    if (userId && sessionId) {
-      // Store auth info in global context
-      authContext.set(sessionId, { userId, token });
-      console.log("[AUTH] Stored auth for session:", sessionId);
+    if (userId) {
+      isAuthenticated = true;
+      // Store auth info in global context if session ID is provided
+      if (sessionId) {
+        authContext.set(sessionId, { userId, token });
+        console.log("[AUTH] Stored auth for session:", sessionId);
+      } else {
+        console.log("[AUTH] No session ID provided, but user authenticated");
+      }
     }
   } else {
     console.log("[AUTH] No Bearer token in Authorization header");
+  }
+  
+  // If not authenticated, return 401 with OAuth info
+  if (!isAuthenticated) {
+    console.log("[AUTH] Returning 401 Unauthorized with OAuth metadata link");
+    res.status(401);
+    res.header("WWW-Authenticate", `Bearer realm="${baseUrl}/mcp-api", error="invalid_token"`);
+    res.header("Link", `<${baseUrl}/.well-known/oauth-protected-resource/mcp-api>; rel="oauth-protected-resource"`);
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Expose-Headers", "Link, WWW-Authenticate");
+    res.json({
+      jsonrpc: "2.0",
+      error: {
+        code: -32001,
+        message: "Authentication required"
+      },
+      id: null
+    });
+    return;
   }
   
   // Check if this is an OPTIONS request
@@ -459,6 +592,8 @@ app.use("/mcp-api", express.json(), async (req, res, next) => {
   
   // Handle the MCP request
   try {
+    console.log("[MCP] Passing authenticated request to transport");
+    console.log("[MCP] Request body:", JSON.stringify(req.body));
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error("[MCP] Error handling request:", error);
