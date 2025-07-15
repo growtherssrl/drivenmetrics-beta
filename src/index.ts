@@ -569,6 +569,9 @@ app.get("/mcp-api/sse", async (req, res) => {
   console.log("[SSE] Connection established for user:", userId || "anonymous");
   
   try {
+    // IMPORTANT: Do NOT set any headers before creating the transport
+    // The SSEServerTransport will handle all SSE headers
+    
     // Create SSE transport with messages endpoint like the old server
     const transport = new SSEServerTransport("/mcp-api/messages", res);
     
@@ -591,7 +594,7 @@ app.get("/mcp-api/sse", async (req, res) => {
     // Connect the transport to our MCP server
     await mcpServer.connect(transport);
     
-    console.log("[SSE] MCP server connected for user:", userId, "session:", sessionId);
+    console.log("[SSE] MCP server connected for user:", userId || 'anonymous', "session:", sessionId);
     
     // Handle connection close
     req.on('close', () => {
@@ -604,15 +607,9 @@ app.get("/mcp-api/sse", async (req, res) => {
     
   } catch (error) {
     console.error("[SSE] Error setting up transport:", error);
+    // Even in error cases, check if headers were sent
     if (!res.headersSent) {
-      res.writeHead(500, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'close',
-        'Access-Control-Allow-Origin': '*',
-      });
-      res.write(`data: ${JSON.stringify({ error: "Internal server error" })}\n\n`);
-      res.end();
+      res.status(500).json({ error: "Internal server error" });
     }
   }
 });
