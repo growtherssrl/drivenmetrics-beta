@@ -25,17 +25,13 @@ const FB_APP_SECRET = process.env.FB_APP_SECRET || "";
 const FB_GRAPH_VERSION = "v21.0";
 
 // Initialize Supabase
-const supabase = SUPABASE_URL && SUPABASE_KEY && SUPABASE_KEY !== "your-supabase-service-key" 
-  ? createClient(SUPABASE_URL, SUPABASE_KEY) 
-  : null;
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Demo mode warning
-if (!supabase) {
-  console.log("⚠️ WARNING: Supabase client not initialized");
-  console.log("  - SUPABASE_URL:", SUPABASE_URL ? "Set" : "Missing");
-  console.log("  - SUPABASE_KEY:", SUPABASE_KEY === "your-supabase-service-key" ? "Using placeholder" : (SUPABASE_KEY ? "Set" : "Missing"));
-  console.log("  - Server will run in DEMO MODE");
-  console.log("  - Demo tokens: dmgt_demo_token");
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("❌ ERROR: Supabase configuration missing!");
+  console.error("  - SUPABASE_URL:", SUPABASE_URL ? "Set" : "Missing");
+  console.error("  - SUPABASE_KEY:", SUPABASE_KEY ? "Set" : "Missing");
+  console.error("  - Server requires proper Supabase configuration");
 }
 
 // Express app
@@ -44,6 +40,9 @@ const app = express();
 // Add request logging middleware
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  if (req.url.includes('well-known')) {
+    console.log('Headers:', req.headers);
+  }
   next();
 });
 
@@ -84,15 +83,6 @@ async function getUserByToken(token: string): Promise<string | null> {
     return null;
   }
   
-  // Demo mode - accept demo tokens
-  if (!supabase) {
-    if (token === "dmgt_demo_token" || token.startsWith("dmgt_demo_")) {
-      console.log("[DB] Demo mode: Accepting demo token");
-      return "demo_user";
-    }
-    console.log("[DB] Demo mode: Invalid token");
-    return null;
-  }
   
   try {
     console.log("[DB] Looking up token in database:", token.substring(0, 10) + "...");
@@ -380,18 +370,24 @@ app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
 // OAuth metadata for /mcp-api endpoint
 app.get("/.well-known/oauth-protected-resource/mcp-api", (req, res) => {
   console.log("📋 OAuth metadata requested for /mcp-api");
+  console.log("Request headers:", req.headers);
+  console.log("Request URL:", req.url);
+  
   res.header("Access-Control-Allow-Origin", "*");
   res.json({
     resource: `${baseUrl}/mcp-api`,
     oauth_authorization_server: baseUrl,
-    oauth_scopes_supported: ["mcp"],
-    mcp_version: "2024-11-05"
+    oauth_scopes_supported: ["mcp"]
   });
 });
 
 app.get("/.well-known/oauth-authorization-server", (req, res) => {
   console.log("📋 OAuth authorization server metadata requested");
+  console.log("Request headers:", req.headers);
+  
   res.header("Access-Control-Allow-Origin", "*");
+  res.header("Content-Type", "application/json");
+  
   res.json({
     issuer: baseUrl,
     authorization_endpoint: `${baseUrl}/authorize`,
@@ -453,8 +449,28 @@ app.use("/mcp-api", express.json(), async (req, res, next) => {
     console.log("[AUTH] No Bearer token in Authorization header");
   }
   
+  // Check if this is an OPTIONS request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   // Handle the MCP request
-  await transport.handleRequest(req, res, req.body);
+  try {
+    await transport.handleRequest(req, res, req.body);
+  } catch (error) {
+    console.error("[MCP] Error handling request:", error);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        jsonrpc: "2.0", 
+        error: { 
+          code: -32603, 
+          message: "Internal error",
+          data: error instanceof Error ? error.message : "Unknown error"
+        },
+        id: null 
+      });
+    }
+  }
 });
 
 // OAuth Authorization endpoint
@@ -469,7 +485,15 @@ app.get("/authorize", (req, res) => {
     scope
   } = req.query;
   
-  console.log("🔐 OAuth authorize request:", { client_id, redirect_uri, state });
+  console.log("🔐 OAuth authorize request:", { 
+    response_type,
+    client_id, 
+    redirect_uri, 
+    state,
+    code_challenge: code_challenge ? "present" : "missing",
+    code_challenge_method,
+    scope
+  });
   
   // Check for existing session
   const sessionId = req.cookies?.session_id;
@@ -586,6 +610,20 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
         if (data?.user) {
           userId = data.user.id;
           isNewUser = true;
+          
+          // Create user in our users table
+          try {
+            await supabase
+              .from("users")
+              .insert({
+                user_id: userId,
+                email: email,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              });
+          } catch (err) {
+            console.error("Error creating user:", err);
+          }
         }
       } else {
         // Login
@@ -601,6 +639,21 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
         }
         if (data?.user) {
           userId = data.user.id;
+          
+          // Ensure user exists in our users table
+          try {
+            await supabase
+              .from("users")
+              .upsert({
+                user_id: userId,
+                email: email,
+                updated_at: new Date().toISOString()
+              }, {
+                onConflict: 'user_id'
+              });
+          } catch (err) {
+            console.error("Error upserting user:", err);
+          }
         }
       }
     } catch (error) {
@@ -612,10 +665,6 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
         supabase: !!supabase
       });
     }
-  } else {
-    // Demo mode - accept any credentials
-    userId = `demo_${email}`;
-    console.log("🎮 Demo mode auth:", userId);
   }
   
   if (!userId) {
@@ -702,11 +751,11 @@ app.post("/token", express.urlencoded({ extended: true }), async (req, res) => {
     }
   }
   
-  // Generate access token
-  const accessToken = `dmgt_${crypto.randomBytes(32).toString('hex')}`;
+  // Get the API token from the code data
+  const accessToken = codeData.api_token || `dmgt_${crypto.randomBytes(32).toString('hex')}`;
   
-  // Save token to database if available
-  if (supabase && codeData.user_id) {
+  // If token wasn't stored in code data, save it to database
+  if (!codeData.api_token && supabase && codeData.user_id) {
     try {
       await supabase
         .from("api_tokens")
@@ -826,6 +875,7 @@ app.get("/dashboard", async (req, res) => {
   let hasFacebook = false;
   let hasClaude = false;
   let apiCalls = 0;
+  let apiToken = null;
   
   if (supabase) {
     try {
@@ -843,8 +893,14 @@ app.get("/dashboard", async (req, res) => {
         .from("api_tokens")
         .select("token")
         .eq("user_id", userId)
+        .order("created_at", { ascending: false })
         .limit(1);
       hasClaude = !!(tokenData && tokenData.length > 0);
+      
+      // Get the actual token to display
+      if (tokenData && tokenData.length > 0) {
+        apiToken = tokenData[0].token;
+      }
       
       // Get API call count (if table exists)
       try {
@@ -862,11 +918,6 @@ app.get("/dashboard", async (req, res) => {
     } catch (error) {
       console.log("Error fetching integration status:", error);
     }
-  } else {
-    // Demo mode
-    hasFacebook = true;
-    hasClaude = true;
-    apiCalls = 42;
   }
   
   try {
@@ -874,7 +925,8 @@ app.get("/dashboard", async (req, res) => {
       user: session,
       has_facebook: hasFacebook,
       has_claude: hasClaude,
-      api_calls: apiCalls
+      api_calls: apiCalls,
+      api_token: apiToken
     });
   } catch (err) {
     console.error('Dashboard template error:', err);
@@ -922,6 +974,43 @@ app.get("/logout", (req, res) => {
     res.clearCookie('session_id');
   }
   res.redirect('/');
+});
+
+// Generate API token endpoint
+app.post("/api/generate-token", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const session = sessions.get(sessionId);
+  const userId = session.user_id;
+  
+  // Generate a new API token
+  const apiToken = `dmgt_${crypto.randomBytes(32).toString('hex')}`;
+  
+  // Save token to database
+  if (supabase) {
+    try {
+      await supabase
+        .from("api_tokens")
+        .insert({
+          token: apiToken,
+          user_id: userId,
+          scopes: ["mcp"],
+          created_at: new Date().toISOString()
+        });
+      console.log("✅ API token generated for user:", userId);
+    } catch (error) {
+      console.error("Error saving token:", error);
+      return res.status(500).json({ error: "Failed to save token" });
+    }
+  }
+  
+  res.json({ 
+    token: apiToken,
+    message: "Token generated successfully. Use this token in Claude.ai when adding the Drivenmetrics server."
+  });
 });
 
 // Setup integrations page
@@ -1129,10 +1218,47 @@ app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
   }
   
   const session = sessions.get(sessionId);
+  const userId = session.user_id;
   const oauthData = oauthStates.get(oauth_state);
   
   if (!oauthData) {
     return res.status(400).send("Invalid OAuth state");
+  }
+  
+  // Check if user has an API token
+  let apiToken = null;
+  try {
+    const { data: tokenData } = await supabase
+      .from("api_tokens")
+      .select("token")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    
+    if (tokenData && tokenData.length > 0) {
+      apiToken = tokenData[0].token;
+    }
+  } catch (error) {
+    console.error("Error fetching token:", error);
+  }
+  
+  if (!apiToken) {
+    // Generate a new token if user doesn't have one
+    apiToken = `dmgt_${crypto.randomBytes(32).toString('hex')}`;
+    try {
+      await supabase
+        .from("api_tokens")
+        .insert({
+          token: apiToken,
+          user_id: userId,
+          scopes: ["mcp"],
+          created_at: new Date().toISOString()
+        });
+      console.log("✅ API token auto-generated for OAuth flow");
+    } catch (error) {
+      console.error("Error saving token:", error);
+      return res.status(500).send("Error generating API token");
+    }
   }
   
   // Generate authorization code for Claude
@@ -1141,7 +1267,8 @@ app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
   // Store auth code with user info
   oauthStates.set(authCode, {
     ...oauthData,
-    user_id: session.user_id,
+    user_id: userId,
+    api_token: apiToken,
     created_at: Date.now()
   });
   

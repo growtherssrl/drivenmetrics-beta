@@ -131,20 +131,24 @@
         </div>
         <% } %>
         
-        <% if (oauth_state && has_facebook) { %>
-        <div class="oauth-pending">
-            <h3>✅ Ready to Connect with Claude.ai</h3>
-            <p>Your account is set up and ready. Click below to complete the connection with Claude.ai.</p>
-            <button onclick="window.location.href='/api/complete-oauth/<%= oauth_state %>'" class="primary">
-                Continue with Claude AI
-            </button>
-        </div>
-        <% } else if (oauth_state && !has_facebook) { %>
-        <div class="oauth-pending">
-            <h3>⚠️ Facebook Connection Required</h3>
-            <p>Please connect your Facebook account first to use Drivenmetrics with Claude.ai.</p>
-            <p>After connecting Facebook, you'll be able to complete the Claude.ai integration.</p>
-        </div>
+        <% if (oauth_state) { %>
+            <% if (has_facebook) { %>
+            <div class="oauth-pending">
+                <h3>✅ Ready to Connect with Claude.ai</h3>
+                <p>Your Facebook account is connected. Now let's generate an API token for Claude.ai.</p>
+                <button onclick="generateAndComplete()" class="primary" style="font-size: 18px; padding: 16px 32px;">
+                    Generate Token & Connect Claude
+                </button>
+            </div>
+            <% } else { %>
+            <div class="oauth-pending">
+                <h3>⚠️ Facebook Connection Required</h3>
+                <p>To use Drivenmetrics with Claude.ai, you need to connect your Facebook account first.</p>
+                <button onclick="window.location.href='/api/authorise/facebook/start?oauth_state=<%= oauth_state %>'" style="margin-top: 16px;">
+                    Connect Facebook Account
+                </button>
+            </div>
+            <% } %>
         <% } %>
         
         <div class="integration-card">
@@ -158,6 +162,14 @@
             <% if (has_facebook) { %>
                 <p>Your Facebook account is connected and ready to use.</p>
                 <p>You can now use the Facebook Ads tools in Claude.ai.</p>
+                <div style="margin-top: 20px;">
+                    <button onclick="window.location.href='/api/authorise/facebook/start'" style="background: #2a2a2a; margin-right: 10px;">
+                        🔄 Reconnect Facebook
+                    </button>
+                    <button onclick="disconnectFacebook()" style="background: #dc2626;">
+                        ❌ Disconnect Facebook
+                    </button>
+                </div>
             <% } else { %>
                 <p>Connect your Facebook account to enable competitor ad analysis.</p>
                 <% if (fb_app_id) { %>
@@ -181,5 +193,39 @@
             </div>
         </div>
     </div>
+    
+    <script>
+        function generateAndComplete() {
+            // Generate token first
+            fetch('/api/generate-token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.token) {
+                    // Now complete the OAuth flow
+                    window.location.href = '/api/complete-oauth/<%= oauth_state %>';
+                } else {
+                    alert('Error generating token. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error generating token. Please try again.');
+            });
+        }
+        
+        function disconnectFacebook() {
+            if (confirm('Are you sure you want to disconnect Facebook? You will need to reconnect to use the ads tools.')) {
+                alert('To fully disconnect, please revoke access in your Facebook settings.');
+                // In a real implementation, we would call an API to delete the token
+                window.location.reload();
+            }
+        }
+    </script>
 </body>
 </html>
