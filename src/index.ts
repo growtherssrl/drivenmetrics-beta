@@ -483,6 +483,17 @@ app.get("/", (req, res) => {
   });
 });
 
+// OAuth metadata endpoint for root resource
+app.get("/.well-known/oauth-protected-resource", (req, res) => {
+  console.log("📋 OAuth metadata requested for root resource");
+  res.header("Access-Control-Allow-Origin", "*");
+  res.json({
+    resource: baseUrl,
+    oauth_authorization_server: baseUrl,
+    oauth_scopes_supported: ["mcp"]
+  });
+});
+
 // OAuth metadata endpoints
 app.get("/.well-known/oauth-protected-resource/mcp-api/sse", (req, res) => {
   console.log("📋 OAuth metadata requested for /mcp-api/sse");
