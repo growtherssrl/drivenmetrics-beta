@@ -1,6 +1,7 @@
 import express from "express";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -37,7 +38,12 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 // Express app
 const app = express();
 
-// Add request logging middleware
+// IMPORTANT: Body parsers must come FIRST before any middleware that might read the body
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Add request logging middleware AFTER body parsers
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   if (req.url.includes('well-known') || req.url.includes('authorize') || req.url.includes('token')) {
@@ -46,39 +52,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
-app.use(cookieParser());
-
-// Custom JSON parser that handles newlines
-app.use((req, res, next) => {
-  if (req.headers['content-type'] === 'application/json') {
-    let data = '';
-    req.on('data', chunk => {
-      data += chunk.toString();
-    });
-    req.on('end', () => {
-      try {
-        // Remove newlines and extra spaces from JSON
-        const cleanedData = data.replace(/\n\s*/g, '');
-        req.body = JSON.parse(cleanedData);
-        next();
-      } catch (error) {
-        console.error('JSON Parse Error:', error);
-        console.error('Original body:', data);
-        console.error('Cleaned body:', data.replace(/\n\s*/g, ''));
-        res.status(400).json({ 
-          error: 'Invalid JSON', 
-          message: error instanceof Error ? error.message : 'Unknown error'
-        });
-      }
-    });
-  } else {
-    next();
-  }
-});
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 app.set('view engine', 'ejs');
 // Find the root directory (where package.json is)
@@ -1547,6 +1520,67 @@ app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
   res.redirect(redirectUrl.toString());
 });
 
+// SSE endpoint for n8n and other SSE clients
+app.get("/mcp-api/sse", async (req, res) => {
+  console.log("[SSE] New SSE connection request");
+  
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+  
+  // Extract auth token
+  const authHeader = req.headers.authorization;
+  let userId: string | null = null;
+  
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    userId = await getUserByToken(token);
+    
+    if (!userId) {
+      console.log("[SSE] Invalid token");
+      res.write(`data: ${JSON.stringify({ error: "Invalid token" })}\n\n`);
+      res.end();
+      return;
+    }
+  } else {
+    console.log("[SSE] No authorization header");
+    res.write(`data: ${JSON.stringify({ error: "Authorization required" })}\n\n`);
+    res.end();
+    return;
+  }
+  
+  console.log("[SSE] Authenticated user:", userId);
+  
+  try {
+    // Create SSE transport
+    const transport = new SSEServerTransport("/mcp-api/sse", res);
+    
+    // Store user context for the transport
+    const sessionId = crypto.randomBytes(16).toString('hex');
+    authContext.set(sessionId, { userId, token: authHeader?.slice(7) || '' });
+    
+    // Connect the transport to our MCP server
+    await mcpServer.connect(transport);
+    
+    console.log("[SSE] MCP server connected for user:", userId);
+    
+    // Handle connection close
+    req.on('close', () => {
+      console.log("[SSE] Client disconnected");
+      authContext.delete(sessionId);
+    });
+    
+  } catch (error) {
+    console.error("[SSE] Error setting up transport:", error);
+    res.write(`data: ${JSON.stringify({ error: "Internal server error" })}\n\n`);
+    res.end();
+  }
+});
+
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err);
@@ -1564,8 +1598,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 MCP Server running on port ${PORT}`);
-  console.log(`📡 MCP endpoint: http://localhost:${PORT}/mcp-api`);
+  console.log(`📡 MCP HTTP endpoint: http://localhost:${PORT}/mcp-api`);
+  console.log(`📡 MCP SSE endpoint: http://localhost:${PORT}/mcp-api/sse`);
   console.log(`🔐 OAuth server: ${baseUrl}`);
   console.log(`📁 Template directory: ${templatesDir}`);
-  console.log(`✅ Ready for Claude.ai connections!`);
+  console.log(`✅ Ready for Claude.ai and n8n connections!`);
 });
