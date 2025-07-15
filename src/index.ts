@@ -596,6 +596,39 @@ app.get("/mcp-api/sse", async (req, res) => {
     
     console.log("[SSE] MCP server connected for user:", userId || 'anonymous', "session:", sessionId);
     
+    // Send initial notifications like the old server
+    setTimeout(async () => {
+      try {
+        // Send initialized notification
+        console.log("[SSE] Sending notifications/initialized");
+        await transport.send({
+          jsonrpc: "2.0",
+          method: "notifications/initialized",
+          params: {
+            meta: {
+              serverName: "drivenmetrics-mcp",
+              serverVersion: "1.0.0"
+            }
+          }
+        });
+        
+        // Small delay between notifications
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Send tools/list_changed notification
+        console.log("[SSE] Sending notifications/tools/list_changed");
+        await transport.send({
+          jsonrpc: "2.0",
+          method: "notifications/tools/list_changed",
+          params: {}
+        });
+        
+        console.log("[SSE] Initial notifications sent");
+      } catch (error) {
+        console.error("[SSE] Error sending initial notifications:", error);
+      }
+    }, 100); // Small delay to ensure connection is fully established
+    
     // Handle connection close
     req.on('close', () => {
       console.log("[SSE] Client disconnected, session:", sessionId);
