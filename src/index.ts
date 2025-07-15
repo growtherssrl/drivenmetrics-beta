@@ -48,6 +48,35 @@ app.use((req, res, next) => {
 });
 
 app.use(cookieParser());
+
+// Custom JSON parser that handles newlines
+app.use((req, res, next) => {
+  if (req.headers['content-type'] === 'application/json') {
+    let data = '';
+    req.on('data', chunk => {
+      data += chunk.toString();
+    });
+    req.on('end', () => {
+      try {
+        // Remove newlines and extra spaces from JSON
+        const cleanedData = data.replace(/\n\s*/g, '');
+        req.body = JSON.parse(cleanedData);
+        next();
+      } catch (error) {
+        console.error('JSON Parse Error:', error);
+        console.error('Original body:', data);
+        console.error('Cleaned body:', data.replace(/\n\s*/g, ''));
+        res.status(400).json({ 
+          error: 'Invalid JSON', 
+          message: error.message 
+        });
+      }
+    });
+  } else {
+    next();
+  }
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -396,6 +425,7 @@ app.get("/test-oauth", (req, res) => {
     <body>
       <h1>Test OAuth Flow</h1>
       <button onclick="testNoAuth()">1. Test Without Auth</button>
+      <button onclick="testWithAuth()">1b. Test With Auth</button>
       <button onclick="testMetadata()">2. Get OAuth Metadata</button>
       <button onclick="testAuthServer()">3. Get Auth Server Metadata</button>
       <button onclick="startOAuth()">4. Start OAuth Flow</button>
@@ -407,6 +437,22 @@ app.get("/test-oauth", (req, res) => {
         
         async function testNoAuth() {
           const res = await fetch(baseUrl + '/mcp-api');
+          const headers = {};
+          res.headers.forEach((v, k) => headers[k] = v);
+          output.textContent = 'Status: ' + res.status + '\\n' +
+            'Headers: ' + JSON.stringify(headers, null, 2) + '\\n' +
+            'Body: ' + await res.text();
+        }
+        
+        async function testWithAuth() {
+          const token = prompt('Enter your API token (dmgt_...):', 'dmgt_18c71aa09bed43e4ac9bad927516c44d');
+          if (!token) return;
+          
+          const res = await fetch(baseUrl + '/mcp-api', {
+            headers: {
+              'Authorization': 'Bearer ' + token
+            }
+          });
           const headers = {};
           res.headers.forEach((v, k) => headers[k] = v);
           output.textContent = 'Status: ' + res.status + '\\n' +
@@ -590,13 +636,65 @@ app.use("/mcp-api", express.json(), async (req, res, next) => {
     return res.status(200).end();
   }
   
+  // Handle GET requests differently - return server info
+  if (req.method === 'GET') {
+    console.log("[MCP] GET request - returning server info");
+    res.json({
+      name: "Drivenmetrics MCP Server",
+      version: "1.0.0",
+      protocol_version: "2025-06-18",
+      capabilities: {
+        tools: {
+          listChanged: true
+        }
+      }
+    });
+    return;
+  }
+  
+  // For POST requests, ensure we have a valid JSON-RPC body
+  if (req.method === 'POST') {
+    if (!req.body || typeof req.body !== 'object') {
+      console.log("[MCP] Invalid request body:", req.body);
+      res.status(400).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32700,
+          message: "Parse error"
+        },
+        id: null
+      });
+      return;
+    }
+    
+    // Set session context for the transport
+    const sessionId = req.headers["mcp-session-id"] as string || crypto.randomBytes(16).toString('hex');
+    const userId = await getUserByToken(authHeader?.slice(7) || '');
+    
+    if (userId) {
+      // Store auth context for this session
+      authContext.set(sessionId, { userId, token: authHeader?.slice(7) || '' });
+      
+      // Set the session ID header for the transport
+      req.headers["mcp-session-id"] = sessionId;
+    }
+  }
+  
   // Handle the MCP request
   try {
     console.log("[MCP] Passing authenticated request to transport");
+    console.log("[MCP] Method:", req.method);
+    console.log("[MCP] Headers:", {
+      'content-type': req.headers['content-type'],
+      'mcp-session-id': req.headers['mcp-session-id']
+    });
     console.log("[MCP] Request body:", JSON.stringify(req.body));
+    
     await transport.handleRequest(req, res, req.body);
   } catch (error) {
     console.error("[MCP] Error handling request:", error);
+    console.error("[MCP] Error stack:", error instanceof Error ? error.stack : 'No stack');
+    
     if (!res.headersSent) {
       res.status(500).json({ 
         jsonrpc: "2.0", 
