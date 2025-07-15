@@ -545,6 +545,67 @@ app.get("/.well-known/oauth-authorization-server", (req, res) => {
 // Remove this endpoint - it might be confusing Claude
 // OAuth authorization server should only be at the root
 
+// SSE endpoint for n8n and other SSE clients - MUST BE BEFORE the general /mcp-api handler
+app.get("/mcp-api/sse", async (req, res) => {
+  console.log("[SSE] New SSE connection request");
+  
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+  });
+  
+  // Extract auth token
+  const authHeader = req.headers.authorization;
+  let userId: string | null = null;
+  
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    userId = await getUserByToken(token);
+    
+    if (!userId) {
+      console.log("[SSE] Invalid token");
+      res.write(`data: ${JSON.stringify({ error: "Invalid token" })}\n\n`);
+      res.end();
+      return;
+    }
+  } else {
+    console.log("[SSE] No authorization header");
+    res.write(`data: ${JSON.stringify({ error: "Authorization required" })}\n\n`);
+    res.end();
+    return;
+  }
+  
+  console.log("[SSE] Authenticated user:", userId);
+  
+  try {
+    // Create SSE transport
+    const transport = new SSEServerTransport("/mcp-api/sse", res);
+    
+    // Store user context for the transport
+    const sessionId = crypto.randomBytes(16).toString('hex');
+    authContext.set(sessionId, { userId, token: authHeader?.slice(7) || '' });
+    
+    // Connect the transport to our MCP server
+    await mcpServer.connect(transport);
+    
+    console.log("[SSE] MCP server connected for user:", userId);
+    
+    // Handle connection close
+    req.on('close', () => {
+      console.log("[SSE] Client disconnected");
+      authContext.delete(sessionId);
+    });
+    
+  } catch (error) {
+    console.error("[SSE] Error setting up transport:", error);
+    res.write(`data: ${JSON.stringify({ error: "Internal server error" })}\n\n`);
+    res.end();
+  }
+});
+
 // Mount the MCP transport handler with authentication
 app.use("/mcp-api", express.json(), async (req, res, next) => {
   console.log("[AUTH] MCP Request received:", {
@@ -1518,67 +1579,6 @@ app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
   
   console.log("✅ Completing OAuth flow, redirecting to Claude.ai");
   res.redirect(redirectUrl.toString());
-});
-
-// SSE endpoint for n8n and other SSE clients
-app.get("/mcp-api/sse", async (req, res) => {
-  console.log("[SSE] New SSE connection request");
-  
-  // Set SSE headers
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
-    'Access-Control-Allow-Origin': '*',
-  });
-  
-  // Extract auth token
-  const authHeader = req.headers.authorization;
-  let userId: string | null = null;
-  
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    const token = authHeader.slice(7);
-    userId = await getUserByToken(token);
-    
-    if (!userId) {
-      console.log("[SSE] Invalid token");
-      res.write(`data: ${JSON.stringify({ error: "Invalid token" })}\n\n`);
-      res.end();
-      return;
-    }
-  } else {
-    console.log("[SSE] No authorization header");
-    res.write(`data: ${JSON.stringify({ error: "Authorization required" })}\n\n`);
-    res.end();
-    return;
-  }
-  
-  console.log("[SSE] Authenticated user:", userId);
-  
-  try {
-    // Create SSE transport
-    const transport = new SSEServerTransport("/mcp-api/sse", res);
-    
-    // Store user context for the transport
-    const sessionId = crypto.randomBytes(16).toString('hex');
-    authContext.set(sessionId, { userId, token: authHeader?.slice(7) || '' });
-    
-    // Connect the transport to our MCP server
-    await mcpServer.connect(transport);
-    
-    console.log("[SSE] MCP server connected for user:", userId);
-    
-    // Handle connection close
-    req.on('close', () => {
-      console.log("[SSE] Client disconnected");
-      authContext.delete(sessionId);
-    });
-    
-  } catch (error) {
-    console.error("[SSE] Error setting up transport:", error);
-    res.write(`data: ${JSON.stringify({ error: "Internal server error" })}\n\n`);
-    res.end();
-  }
 });
 
 // Error handling middleware
