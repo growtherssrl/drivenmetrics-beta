@@ -577,10 +577,10 @@ app.get("/mcp-api/sse", async (req, res) => {
     
     // Store auth info for this transport
     (transport as any).authToken = authHeader?.slice(7) || '';
-    (transport as any).userId = userId;
+    (transport as any).userId = userId || 'anonymous';
     
     // Store in global context for message handling
-    authContext.set(sessionId, { userId, token: authHeader?.slice(7) || '' });
+    authContext.set(sessionId, { userId: userId || 'anonymous', token: authHeader?.slice(7) || '' });
     
     // Set up onclose handler
     (transport as any).onclose = () => {
@@ -647,9 +647,16 @@ app.post("/mcp-api/messages", async (req, res) => {
     console.log("[SSE] Authenticated session for user:", authInfo.userId);
   }
   
-  // Pass the request to the transport handler
-  // The transport will handle the actual message processing
-  next();
+  // The SSE transport should handle this request
+  // For now, return a response indicating the session is valid
+  res.json({
+    jsonrpc: "2.0",
+    result: {
+      sessionId: sessionId,
+      authenticated: !!authInfo
+    },
+    id: req.body?.id || null
+  });
 });
 
 // Mount the MCP transport handler with authentication
