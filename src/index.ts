@@ -68,7 +68,7 @@ app.use((req, res, next) => {
         console.error('Cleaned body:', data.replace(/\n\s*/g, ''));
         res.status(400).json({ 
           error: 'Invalid JSON', 
-          message: error.message 
+          message: error instanceof Error ? error.message : 'Unknown error'
         });
       }
     });
