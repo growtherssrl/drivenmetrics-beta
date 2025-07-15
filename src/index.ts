@@ -658,47 +658,8 @@ app.get("/mcp-api/sse", async (req, res) => {
   }
 });
 
-// Messages endpoint for SSE transport - MUST BE BEFORE the general handler
-app.post("/mcp-api/messages", async (req, res) => {
-  console.log("[SSE] Message received on /mcp-api/messages");
-  console.log("[SSE] Query params:", req.query);
-  console.log("[SSE] Body:", req.body);
-  
-  // Extract session ID from query parameters
-  const sessionId = req.query.sessionId as string;
-  
-  if (!sessionId) {
-    console.error("[SSE] No session ID provided in request URL");
-    return res.status(400).json({ 
-      jsonrpc: "2.0",
-      error: { 
-        code: -32600, 
-        message: "Missing sessionId parameter" 
-      },
-      id: req.body?.id || null
-    });
-  }
-  
-  // Get auth context for this session
-  const authInfo = authContext.get(sessionId);
-  if (!authInfo) {
-    // Allow anonymous sessions
-    console.log(`[SSE] Anonymous session: ${sessionId}`);
-  } else {
-    console.log("[SSE] Authenticated session for user:", authInfo.userId);
-  }
-  
-  // The SSE transport should handle this request
-  // For now, return a response indicating the session is valid
-  res.json({
-    jsonrpc: "2.0",
-    result: {
-      sessionId: sessionId,
-      authenticated: !!authInfo
-    },
-    id: req.body?.id || null
-  });
-});
+// Messages endpoint for SSE transport - Let the transport handle this
+// Removed manual handling to avoid interfering with SSE transport
 
 // Mount the MCP transport handler with authentication
 app.use("/mcp-api", express.json(), async (req, res, next) => {
