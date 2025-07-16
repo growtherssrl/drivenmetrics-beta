@@ -1432,60 +1432,30 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
       return res.redirect("/login?error=No%20email%20permission%20from%20Facebook");
     }
     
-    // Check if user exists in Supabase
-    let userId = null;
-    if (supabase) {
-      // First check if user exists in our users table
-      const { data: existingUser, error: searchError } = await supabase
+    // Get the logged-in user from the session
+    const sessionId = req.cookies?.session_id;
+    if (!sessionId || !sessions.has(sessionId)) {
+      console.error("No valid session found for Facebook callback");
+      return res.redirect("/login?error=Session%20expired");
+    }
+    
+    const session = sessions.get(sessionId);
+    const userId = session.user_id;
+    console.log("Facebook callback for existing user:", userId);
+    
+    // Update user's Facebook info in database
+    if (supabase && userId) {
+      const { error: updateError } = await supabase
         .from("users")
-        .select("user_id, facebook_id")
-        .eq("email", fbUser.email)
-        .single();
+        .update({
+          facebook_id: fbUser.id,
+          name: fbUser.name || session.name, // Keep existing name if Facebook doesn't provide one
+          updated_at: new Date().toISOString()
+        })
+        .eq("user_id", userId);
       
-      if (searchError && searchError.code !== 'PGRST116') {
-        console.error("Error searching for user:", searchError);
-      }
-      
-      if (existingUser) {
-        userId = existingUser.user_id; // Use user_id, not id
-        console.log("Existing user found:", userId);
-        
-        // Update user info if needed
-        const { error: updateError } = await supabase
-          .from("users")
-          .update({
-            name: fbUser.name,
-            facebook_id: fbUser.id,
-            last_login: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq("user_id", userId);
-        
-        if (updateError) {
-          console.error("Error updating user:", updateError);
-        }
-      } else {
-        // Create new user in our users table
-        userId = crypto.randomUUID(); // Generate a new UUID for the user
-        
-        const { error: insertError } = await supabase
-          .from("users")
-          .insert({
-            user_id: userId,
-            facebook_id: fbUser.id,
-            email: fbUser.email,
-            name: fbUser.name,
-            provider: 'facebook',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-        
-        if (insertError) {
-          console.error("Error creating user:", insertError);
-          return res.redirect("/login?error=Failed%20to%20create%20account");
-        }
-        
-        console.log("New user created:", userId);
+      if (updateError) {
+        console.error("Error updating user Facebook info:", updateError);
       }
       
       // Store Facebook token in facebook_tokens table
@@ -1509,20 +1479,7 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
       }
     }
     
-    // Create session
-    const sessionId = crypto.randomBytes(32).toString('hex');
-    sessions.set(sessionId, {
-      user_id: userId || fbUser.id,
-      email: fbUser.email,
-      created_at: Date.now()
-    });
-    
-    // Set session cookie
-    res.cookie('session_id', sessionId, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    });
+    // Don't create a new session - user should already be logged in
     
     // Redirect to dashboard or original OAuth flow
     if (state) {
@@ -1959,8 +1916,10 @@ app.get("/api/authorise/facebook/start", (req, res) => {
   const fbState = crypto.randomBytes(16).toString('hex');
   
   // Store state linked to session, including any pending OAuth state
+  const session = sessions.get(sessionId);
   oauthStates.set(fbState, {
     session_id: sessionId,
+    user_id: session.user_id,
     type: 'facebook',
     created_at: Date.now(),
     pending_oauth_state: req.query.oauth_state // Preserve OAuth state for Claude.ai
