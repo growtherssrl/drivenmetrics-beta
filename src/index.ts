@@ -1317,19 +1317,20 @@ app.post("/api/update-password", async (req, res) => {
   
   if (supabase) {
     try {
-      // First, set the session with the access token
-      const { data: { user }, error: sessionError } = await supabase.auth.getUser(accessToken);
+      // First set the session with the access token
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: '' // We don't have refresh token in password reset flow
+      });
       
-      if (sessionError || !user) {
+      if (sessionError || !sessionData.session) {
         console.error("Session error:", sessionError);
         return res.status(401).json({ error: "Invalid or expired reset token" });
       }
       
-      // Now update the password using the anon client with the user's token
+      // Now update the password with the active session
       const { data, error } = await supabase.auth.updateUser({
         password: password
-      }, {
-        accessToken: accessToken
       });
       
       if (error) {
