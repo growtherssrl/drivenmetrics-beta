@@ -296,8 +296,10 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   console.log("[TOOL] Auth found:", auth ? { userId: auth.userId, hasToken: !!auth.token } : "No auth");
   
   const userId = auth?.userId || null;
-  const fbToken = userId ? await getFacebookToken(userId) : null;
-  console.log("[TOOL] Tool execution context:", { userId, hasFbToken: !!fbToken });
+  // Don't get user token for public searches - we'll use app token
+  // const fbToken = userId ? await getFacebookToken(userId) : null;
+  const fbToken = null; // Force use of app access token
+  console.log("[TOOL] Tool execution context:", { userId, hasFbToken: !!fbToken, forcingAppToken: true });
   
   try {
     let result: any;
