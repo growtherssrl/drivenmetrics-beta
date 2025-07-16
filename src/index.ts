@@ -128,12 +128,18 @@ async function getFacebookToken(userId: string): Promise<string | null> {
 
 // Get Facebook App Access Token
 async function getAppAccessToken(): Promise<string | null> {
+  // Temporary: use hardcoded token for testing
+  console.log("Using hardcoded App Access Token for testing");
+  return "487381020448229|mKKyiFgHrHva79OycRJvGjxcfCg";
+  
+  /* Original code - commented for testing
   if (!FB_APP_ID || !FB_APP_SECRET) {
     console.error("Facebook App ID or Secret not configured");
     return null;
   }
   
   try {
+    console.log("Requesting App Access Token with App ID:", FB_APP_ID);
     const response = await axios.get(`https://graph.facebook.com/${FB_GRAPH_VERSION}/oauth/access_token`, {
       params: {
         client_id: FB_APP_ID,
@@ -142,11 +148,13 @@ async function getAppAccessToken(): Promise<string | null> {
       }
     });
     
+    console.log("App Access Token received successfully");
     return response.data.access_token;
-  } catch (error) {
-    console.error("Error getting app access token:", error);
+  } catch (error: any) {
+    console.error("Error getting app access token:", error.response?.data || error.message);
     return null;
   }
+  */
 }
 
 // Facebook API helper
@@ -155,10 +163,14 @@ async function fetchAdsFromFacebook(params: any, fbToken: string | null): Promis
     // For public Ad Library, we can use app access token
     let accessToken = fbToken;
     if (!accessToken) {
+      console.log("No user token provided, getting App Access Token...");
       accessToken = await getAppAccessToken();
       if (!accessToken) {
         return { error: "Failed to get Facebook access token" };
       }
+      console.log("Using App Access Token for Ad Library search");
+    } else {
+      console.log("Using user token for Ad Library search");
     }
     
     const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/ads_archive`;
