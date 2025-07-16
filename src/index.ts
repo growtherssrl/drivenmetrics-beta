@@ -1330,7 +1330,7 @@ app.post("/api/update-password", async (req, res) => {
         body: JSON.stringify({ password })
       });
       
-      const responseData = await response.json();
+      const responseData: any = await response.json();
       
       if (!response.ok) {
         console.error("Supabase API error:", response.status, responseData);
