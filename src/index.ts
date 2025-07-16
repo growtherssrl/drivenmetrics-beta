@@ -1494,7 +1494,7 @@ app.get("/api/authorise/facebook/start", (req, res) => {
   const params = new URLSearchParams({
     client_id: FB_APP_ID,
     redirect_uri: `${baseUrl}/api/authorise/facebook/callback`,
-    scope: 'ads_read',
+    scope: 'public_profile,email',
     state: fbState,
     response_type: 'code'
   });
