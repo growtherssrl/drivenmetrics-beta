@@ -922,6 +922,10 @@ app.get("/authorize", (req, res) => {
           input { width: 100%; padding: 0.75rem; margin: 0.5rem 0; border: 1px solid #333; background: #0a0a0a; color: white; border-radius: 4px; box-sizing: border-box; }
           button { width: 100%; padding: 0.75rem; background: #0066ff; color: white; border: none; border-radius: 4px; cursor: pointer; }
           .info { text-align: center; margin-top: 1rem; color: #666; font-size: 0.9rem; }
+          .forgot-link { text-align: center; margin-top: 1rem; }
+          .forgot-link a { color: #0066ff; text-decoration: none; font-size: 0.9rem; }
+          .forgot-link a:hover { text-decoration: underline; }
+          #resetMessage { text-align: center; margin-top: 1rem; }
         </style>
       </head>
       <body>
@@ -930,11 +934,47 @@ app.get("/authorize", (req, res) => {
           <p style="text-align: center; color: #999;">Authorize Claude.ai to access your account</p>
           <form method="POST" action="/login">
             <input type="hidden" name="state" value="${stateId}">
-            <input type="email" name="email" placeholder="Email" required>
+            <input type="email" name="email" id="email" placeholder="Email" required>
             <input type="password" name="password" placeholder="Password" required>
             <button type="submit">Authorize</button>
           </form>
+          <div class="forgot-link">
+            <a href="#" onclick="resetPassword(); return false;">Forgot your password?</a>
+          </div>
+          <div id="resetMessage"></div>
           ${!supabase ? '<div class="info">Demo mode: Use any email/password</div>' : ''}
+          <script>
+            async function resetPassword() {
+              const email = document.getElementById('email').value;
+              const messageDiv = document.getElementById('resetMessage');
+              
+              if (!email) {
+                messageDiv.style.color = '#ff4444';
+                messageDiv.textContent = 'Please enter your email first';
+                return;
+              }
+              
+              try {
+                const res = await fetch('/reset-password', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email })
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                  messageDiv.style.color = '#44ff44';
+                  messageDiv.textContent = data.message;
+                } else {
+                  messageDiv.style.color = '#ff4444';
+                  messageDiv.textContent = data.error || 'Failed to send reset email';
+                }
+              } catch (error) {
+                messageDiv.style.color = '#ff4444';
+                messageDiv.textContent = 'Network error';
+              }
+            }
+          </script>
         </div>
       </body>
       </html>
@@ -961,7 +1001,7 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
           email, 
           password,
           options: {
-            emailRedirectTo: `${baseUrl}/auth/confirm`
+            emailRedirectTo: `https://mcp.drivenmetrics.com/auth/confirm`
           }
         });
         if (error) {
@@ -1092,6 +1132,185 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
   
   console.log("✅ Auth successful, redirecting with code");
   res.redirect(redirectUrl.toString());
+});
+
+// Password reset endpoint
+app.post("/reset-password", async (req, res) => {
+  const { email } = req.body;
+  
+  if (!email) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+  
+  if (supabase) {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `https://mcp.drivenmetrics.com/update-password`
+      });
+      
+      if (error) {
+        console.error("Password reset error:", error);
+        return res.status(400).json({ error: "Failed to send reset email" });
+      }
+      
+      return res.json({ 
+        success: true, 
+        message: "Password reset email sent. Please check your inbox." 
+      });
+    } catch (error) {
+      console.error("Reset password error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  } else {
+    return res.status(503).json({ error: "Password reset not available" });
+  }
+});
+
+// Email confirmation handler
+app.get("/auth/confirm", async (req, res) => {
+  // Supabase sends the token in the fragment, but we can handle it client-side
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Email Confirmed - Drivenmetrics</title>
+      <style>
+        body { font-family: sans-serif; background: #0a0a0a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .message-box { background: #1a1a1a; padding: 2rem; border-radius: 12px; width: 400px; text-align: center; }
+        h2 { color: #44ff44; }
+        a { color: #0066ff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+      </style>
+    </head>
+    <body>
+      <div class="message-box">
+        <h2>✓ Email Confirmed!</h2>
+        <p>Your email has been successfully confirmed.</p>
+        <p>You can now <a href="/login">login to your account</a>.</p>
+      </div>
+      <script>
+        // Handle the hash fragment from Supabase
+        if (window.location.hash) {
+          const params = new URLSearchParams(window.location.hash.substring(1));
+          const type = params.get('type');
+          if (type === 'signup' || type === 'recovery') {
+            // Email confirmed or password recovery
+            console.log('Auth confirmed:', type);
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// Update password page
+app.get("/update-password", (req, res) => {
+  try {
+    res.render('update_password', {});
+  } catch (err) {
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Update Password - Drivenmetrics</title>
+        <style>
+          body { font-family: sans-serif; background: #0a0a0a; color: white; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+          .form-box { background: #1a1a1a; padding: 2rem; border-radius: 12px; width: 300px; }
+          h2 { text-align: center; }
+          input { width: 100%; padding: 0.75rem; margin: 0.5rem 0; border: 1px solid #333; background: #0a0a0a; color: white; border-radius: 4px; box-sizing: border-box; }
+          button { width: 100%; padding: 0.75rem; background: #0066ff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+          .error { color: #ff4444; text-align: center; margin: 1rem 0; }
+          .success { color: #44ff44; text-align: center; margin: 1rem 0; }
+        </style>
+      </head>
+      <body>
+        <div class="form-box">
+          <h2>Update Password</h2>
+          <form id="updateForm">
+            <input type="password" id="password" placeholder="New Password" required minlength="6">
+            <input type="password" id="confirmPassword" placeholder="Confirm Password" required>
+            <button type="submit">Update Password</button>
+            <div id="message"></div>
+          </form>
+          <script>
+            document.getElementById('updateForm').onsubmit = async (e) => {
+              e.preventDefault();
+              const password = document.getElementById('password').value;
+              const confirmPassword = document.getElementById('confirmPassword').value;
+              const messageDiv = document.getElementById('message');
+              
+              if (password !== confirmPassword) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = 'Passwords do not match';
+                return;
+              }
+              
+              try {
+                const res = await fetch('/api/update-password', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ password })
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                  messageDiv.className = 'success';
+                  messageDiv.textContent = 'Password updated! Redirecting...';
+                  setTimeout(() => window.location.href = '/login', 2000);
+                } else {
+                  messageDiv.className = 'error';
+                  messageDiv.textContent = data.error || 'Failed to update password';
+                }
+              } catch (error) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = 'Network error';
+              }
+            };
+          </script>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
+// API endpoint for updating password
+app.post("/api/update-password", async (req, res) => {
+  const { password } = req.body;
+  
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters" });
+  }
+  
+  // Get access token from hash (this would be sent from client)
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "No access token provided" });
+  }
+  
+  const accessToken = authHeader.slice(7);
+  
+  if (supabase) {
+    try {
+      // Update password using the access token from email
+      const { error } = await supabase.auth.updateUser({
+        password: password
+      });
+      
+      if (error) {
+        console.error("Password update error:", error);
+        return res.status(400).json({ error: "Failed to update password" });
+      }
+      
+      return res.json({ success: true, message: "Password updated successfully" });
+    } catch (error) {
+      console.error("Update password error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  } else {
+    return res.status(503).json({ error: "Password update not available" });
+  }
 });
 
 // Token endpoint
