@@ -24,6 +24,7 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
 const FB_APP_ID = process.env.FB_APP_ID || "";
 const FB_APP_SECRET = process.env.FB_APP_SECRET || "";
 const FB_GRAPH_VERSION = "v21.0";
+const DEFAULT_AD_COUNTRY = process.env.DEFAULT_AD_COUNTRY || "IT"; // Default country for ad searches
 
 // Initialize Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -178,7 +179,7 @@ async function fetchAdsFromFacebook(params: any, fbToken: string | null): Promis
       params: {
         ...params,
         access_token: accessToken,
-        fields: 'id,ad_creative_body,ad_creative_link_caption,ad_creative_link_description,ad_creative_link_title,ad_delivery_start_time,ad_delivery_stop_time,page_id,page_name,impressions,spend',
+        fields: 'id,ad_creation_time,ad_creative_bodies,ad_creative_link_captions,ad_creative_link_descriptions,ad_creative_link_titles,ad_delivery_start_time,ad_delivery_stop_time,ad_snapshot_url,age_country_gender_reach_breakdown,beneficiary_payers,br_total_reach,currency,demographic_distribution,estimated_audience_size,eu_total_reach,impressions,languages,page_id,page_name,publisher_platforms,spend,target_ages,target_gender,target_locations,total_reach_by_location',
       },
       timeout: 30000,
     });
@@ -236,7 +237,7 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
           type: "object",
           properties: {
             keywords: { type: "string", description: "Keywords to search" },
-            country: { type: "string", default: "ALL" },
+            country: { type: "string", default: "IT", description: "Country code (e.g., IT, US, GB)" },
             limit: { type: "number", default: 10 },
           },
           required: ["keywords"],
@@ -316,14 +317,12 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       case "search_competitor_ads":
         // Use app access token for public Ad Library searches
         const params: any = {
-          ad_type: "ALL", // Changed from POLITICAL_AND_ISSUE_ADS to ALL
+          ad_type: "POLITICAL_AND_ISSUE_ADS", // Try with original type
           ad_active_status: "ALL",
           search_terms: args?.keywords || "",
           limit: args?.limit || 10,
+          ad_reached_countries: args?.country || DEFAULT_AD_COUNTRY // Use configurable default country
         };
-        if (args?.country && args.country !== "ALL") {
-          params.ad_reached_countries = args.country;
-        }
         // Pass null as token to use app access token
         const fbResult = await fetchAdsFromFacebook(params, null);
         result = fbResult.error ? fbResult : {
@@ -336,7 +335,7 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       case "search_ads_by_page":
         // Use app access token for public Ad Library searches
         const pageParams = {
-          ad_type: "ALL", // Changed from POLITICAL_AND_ISSUE_ADS to ALL
+          ad_type: "POLITICAL_AND_ISSUE_ADS", // Try with original type
           ad_active_status: "ALL",
           search_page_ids: args?.page_id || "",
           limit: args?.limit || 25,
