@@ -297,10 +297,9 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   console.log("[TOOL] Auth found:", auth ? { userId: auth.userId, hasToken: !!auth.token } : "No auth");
   
   const userId = auth?.userId || null;
-  // Don't get user token for public searches - we'll use app token
-  // const fbToken = userId ? await getFacebookToken(userId) : null;
-  const fbToken = null; // Force use of app access token
-  console.log("[TOOL] Tool execution context:", { userId, hasFbToken: !!fbToken, forcingAppToken: true });
+  // Get user's Facebook token if available
+  const fbToken = userId ? await getFacebookToken(userId) : null;
+  console.log("[TOOL] Tool execution context:", { userId, hasFbToken: !!fbToken });
   
   try {
     let result: any;
@@ -323,8 +322,8 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           limit: args?.limit || 10,
           ad_reached_countries: args?.country || DEFAULT_AD_COUNTRY // Use configurable default country
         };
-        // Pass null as token to use app access token
-        const fbResult = await fetchAdsFromFacebook(params, null);
+        // Use user's Facebook token for the search
+        const fbResult = await fetchAdsFromFacebook(params, fbToken);
         result = fbResult.error ? fbResult : {
           keywords: args?.keywords || "",
           ads_found: fbResult.data?.length || 0,
@@ -340,8 +339,8 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           search_page_ids: args?.page_id || "",
           limit: args?.limit || 25,
         };
-        // Pass null as token to use app access token
-        const pageResult = await fetchAdsFromFacebook(pageParams, null);
+        // Use user's Facebook token for the search
+        const pageResult = await fetchAdsFromFacebook(pageParams, fbToken);
         result = pageResult.error ? pageResult : {
           page_id: args?.page_id || "",
           ads_found: pageResult.data?.length || 0,
