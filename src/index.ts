@@ -1315,10 +1315,10 @@ app.post("/api/update-password", async (req, res) => {
   
   const accessToken = authHeader.slice(7);
   
-  if (supabase_anon) {
+  if (supabase) {
     try {
       // First, set the session with the access token
-      const { data: { user }, error: sessionError } = await supabase_anon.auth.getUser(accessToken);
+      const { data: { user }, error: sessionError } = await supabase.auth.getUser(accessToken);
       
       if (sessionError || !user) {
         console.error("Session error:", sessionError);
@@ -1326,7 +1326,7 @@ app.post("/api/update-password", async (req, res) => {
       }
       
       // Now update the password using the anon client with the user's token
-      const { data, error } = await supabase_anon.auth.updateUser({
+      const { data, error } = await supabase.auth.updateUser({
         password: password
       }, {
         accessToken: accessToken
