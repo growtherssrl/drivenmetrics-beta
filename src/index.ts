@@ -1435,34 +1435,56 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
     // Check if user exists in Supabase
     let userId = null;
     if (supabase) {
-      // First check if user exists
-      const { data: existingUser } = await supabase
+      // First check if user exists in our users table
+      const { data: existingUser, error: searchError } = await supabase
         .from("users")
-        .select("id")
+        .select("user_id, facebook_id")
         .eq("email", fbUser.email)
         .single();
       
+      if (searchError && searchError.code !== 'PGRST116') {
+        console.error("Error searching for user:", searchError);
+      }
+      
       if (existingUser) {
-        userId = existingUser.id;
+        userId = existingUser.user_id; // Use user_id, not id
         console.log("Existing user found:", userId);
-      } else {
-        // Create new user with Facebook auth
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email: fbUser.email,
-          email_confirm: true,
-          user_metadata: {
-            full_name: fbUser.name,
-            provider: 'facebook',
-            facebook_id: fbUser.id
-          }
-        });
         
-        if (authError) {
-          console.error("Error creating user:", authError);
+        // Update user info if needed
+        const { error: updateError } = await supabase
+          .from("users")
+          .update({
+            name: fbUser.name,
+            facebook_id: fbUser.id,
+            last_login: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq("user_id", userId);
+        
+        if (updateError) {
+          console.error("Error updating user:", updateError);
+        }
+      } else {
+        // Create new user in our users table
+        userId = crypto.randomUUID(); // Generate a new UUID for the user
+        
+        const { error: insertError } = await supabase
+          .from("users")
+          .insert({
+            user_id: userId,
+            facebook_id: fbUser.id,
+            email: fbUser.email,
+            name: fbUser.name,
+            provider: 'facebook',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        
+        if (insertError) {
+          console.error("Error creating user:", insertError);
           return res.redirect("/login?error=Failed%20to%20create%20account");
         }
         
-        userId = authData.user?.id;
         console.log("New user created:", userId);
       }
       
@@ -1474,8 +1496,10 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
           user_id: userId,
           access_token: access_token,
           service: 'competition',
-          created_at: new Date().toISOString(),
+          facebook_user_id: fbUser.id,
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id'
         });
       
       if (tokenError) {
