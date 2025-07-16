@@ -126,14 +126,46 @@ async function getFacebookToken(userId: string): Promise<string | null> {
   }
 }
 
-// Facebook API helper
-async function fetchAdsFromFacebook(params: any, fbToken: string): Promise<any> {
+// Get Facebook App Access Token
+async function getAppAccessToken(): Promise<string | null> {
+  if (!FB_APP_ID || !FB_APP_SECRET) {
+    console.error("Facebook App ID or Secret not configured");
+    return null;
+  }
+  
   try {
+    const response = await axios.get(`https://graph.facebook.com/${FB_GRAPH_VERSION}/oauth/access_token`, {
+      params: {
+        client_id: FB_APP_ID,
+        client_secret: FB_APP_SECRET,
+        grant_type: 'client_credentials'
+      }
+    });
+    
+    return response.data.access_token;
+  } catch (error) {
+    console.error("Error getting app access token:", error);
+    return null;
+  }
+}
+
+// Facebook API helper
+async function fetchAdsFromFacebook(params: any, fbToken: string | null): Promise<any> {
+  try {
+    // For public Ad Library, we can use app access token
+    let accessToken = fbToken;
+    if (!accessToken) {
+      accessToken = await getAppAccessToken();
+      if (!accessToken) {
+        return { error: "Failed to get Facebook access token" };
+      }
+    }
+    
     const url = `https://graph.facebook.com/${FB_GRAPH_VERSION}/ads_archive`;
     const response = await axios.get(url, {
       params: {
         ...params,
-        access_token: fbToken,
+        access_token: accessToken,
         fields: 'id,ad_creative_body,ad_creative_link_caption,ad_creative_link_description,ad_creative_link_title,ad_delivery_start_time,ad_delivery_stop_time,page_id,page_name,impressions,spend',
       },
       timeout: 30000,
@@ -1351,6 +1383,151 @@ app.post("/api/update-password", async (req, res) => {
   }
 });
 
+// Facebook OAuth callback endpoint
+app.get("/api/authorise/facebook/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+  
+  console.log("🔐 Facebook OAuth callback:", { code: code ? "present" : "missing", state, error });
+  
+  if (error) {
+    console.error("Facebook OAuth error:", error);
+    return res.redirect(`/login?error=${encodeURIComponent("Facebook login failed")}`);
+  }
+  
+  if (!code || typeof code !== 'string') {
+    return res.redirect("/login?error=Missing%20authorization%20code");
+  }
+  
+  try {
+    // Exchange code for access token
+    const tokenUrl = `https://graph.facebook.com/${FB_GRAPH_VERSION}/oauth/access_token`;
+    const tokenParams = {
+      client_id: FB_APP_ID,
+      client_secret: FB_APP_SECRET,
+      redirect_uri: `https://mcp.drivenmetrics.com/api/authorise/facebook/callback`,
+      code: code
+    };
+    
+    console.log("Exchanging Facebook code for token...");
+    const tokenResponse = await axios.get(tokenUrl, { params: tokenParams });
+    const { access_token } = tokenResponse.data;
+    
+    if (!access_token) {
+      throw new Error("No access token received from Facebook");
+    }
+    
+    // Get user info from Facebook
+    const userUrl = `https://graph.facebook.com/${FB_GRAPH_VERSION}/me`;
+    const userParams = {
+      fields: 'id,email,name',
+      access_token: access_token
+    };
+    
+    const userResponse = await axios.get(userUrl, { params: userParams });
+    const fbUser = userResponse.data;
+    
+    console.log("Facebook user info:", { id: fbUser.id, email: fbUser.email, name: fbUser.name });
+    
+    if (!fbUser.email) {
+      return res.redirect("/login?error=No%20email%20permission%20from%20Facebook");
+    }
+    
+    // Check if user exists in Supabase
+    let userId = null;
+    if (supabase) {
+      // First check if user exists
+      const { data: existingUser } = await supabase
+        .from("users")
+        .select("id")
+        .eq("email", fbUser.email)
+        .single();
+      
+      if (existingUser) {
+        userId = existingUser.id;
+        console.log("Existing user found:", userId);
+      } else {
+        // Create new user with Facebook auth
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: fbUser.email,
+          email_confirm: true,
+          user_metadata: {
+            full_name: fbUser.name,
+            provider: 'facebook',
+            facebook_id: fbUser.id
+          }
+        });
+        
+        if (authError) {
+          console.error("Error creating user:", authError);
+          return res.redirect("/login?error=Failed%20to%20create%20account");
+        }
+        
+        userId = authData.user?.id;
+        console.log("New user created:", userId);
+      }
+      
+      // Store Facebook token
+      await supabase
+        .from("user_providers")
+        .upsert({
+          user_id: userId,
+          provider: 'facebook',
+          provider_user_id: fbUser.id,
+          access_token: access_token,
+          updated_at: new Date().toISOString()
+        });
+    }
+    
+    // Create session
+    const sessionId = crypto.randomBytes(32).toString('hex');
+    sessions.set(sessionId, {
+      user_id: userId || fbUser.id,
+      email: fbUser.email,
+      created_at: Date.now()
+    });
+    
+    // Set session cookie
+    res.cookie('session_id', sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
+    
+    // Redirect to dashboard or original OAuth flow
+    if (state) {
+      // This was part of an OAuth flow
+      const oauthState = oauthStates.get(state as string);
+      if (oauthState) {
+        // Generate authorization code
+        const authCode = crypto.randomBytes(32).toString('hex');
+        oauthStates.set(authCode, {
+          ...oauthState,
+          user_id: userId || fbUser.id,
+          created_at: Date.now()
+        });
+        
+        // Clean up state
+        oauthStates.delete(state as string);
+        
+        // Redirect back with code
+        const redirectUrl = new URL(oauthState.redirect_uri);
+        redirectUrl.searchParams.set('code', authCode);
+        redirectUrl.searchParams.set('state', oauthState.state);
+        
+        return res.redirect(redirectUrl.toString());
+      }
+    }
+    
+    // Regular login, redirect to dashboard
+    res.redirect('/dashboard');
+    
+  } catch (error) {
+    console.error("Facebook OAuth error:", error);
+    const errorMessage = error instanceof Error ? error.message : "Facebook login failed";
+    res.redirect(`/login?error=${encodeURIComponent(errorMessage)}`);
+  }
+});
+
 // Token endpoint
 app.post("/token", express.urlencoded({ extended: true }), async (req, res) => {
   const { grant_type, code, redirect_uri, code_verifier } = req.body;
@@ -1746,12 +1923,12 @@ app.get("/api/authorise/facebook/start", (req, res) => {
   const params = new URLSearchParams({
     client_id: FB_APP_ID,
     redirect_uri: `${baseUrl}/api/authorise/facebook/callback`,
-    scope: 'public_profile,email',
+    scope: 'public_profile,email,business_management',
     state: fbState,
     response_type: 'code'
   });
   
-  const fbAuthUrl = `https://www.facebook.com/v${FB_GRAPH_VERSION}/dialog/oauth?${params}`;
+  const fbAuthUrl = `https://www.facebook.com/${FB_GRAPH_VERSION}/dialog/oauth?${params}`;
   console.log("🔐 Redirecting to Facebook OAuth:", fbAuthUrl);
   
   res.redirect(fbAuthUrl);
