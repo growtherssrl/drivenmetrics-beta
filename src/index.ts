@@ -300,44 +300,40 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         break;
         
       case "search_competitor_ads":
-        if (!fbToken) {
-          result = { error: "Facebook authentication required" };
-        } else {
-          const params: any = {
-            ad_type: "POLITICAL_AND_ISSUE_ADS",
-            ad_active_status: "ALL",
-            search_terms: args?.keywords || "",
-            limit: args?.limit || 10,
-          };
-          if (args?.country && args.country !== "ALL") {
-            params.ad_reached_countries = args.country;
-          }
-          const fbResult = await fetchAdsFromFacebook(params, fbToken);
-          result = fbResult.error ? fbResult : {
-            keywords: args?.keywords || "",
-            ads_found: fbResult.data?.length || 0,
-            ads: fbResult.data || [],
-          };
+        // Use app access token for public Ad Library searches
+        const params: any = {
+          ad_type: "ALL", // Changed from POLITICAL_AND_ISSUE_ADS to ALL
+          ad_active_status: "ALL",
+          search_terms: args?.keywords || "",
+          limit: args?.limit || 10,
+        };
+        if (args?.country && args.country !== "ALL") {
+          params.ad_reached_countries = args.country;
         }
+        // Pass null as token to use app access token
+        const fbResult = await fetchAdsFromFacebook(params, null);
+        result = fbResult.error ? fbResult : {
+          keywords: args?.keywords || "",
+          ads_found: fbResult.data?.length || 0,
+          ads: fbResult.data || [],
+        };
         break;
         
       case "search_ads_by_page":
-        if (!fbToken) {
-          result = { error: "Facebook authentication required" };
-        } else {
-          const params = {
-            ad_type: "POLITICAL_AND_ISSUE_ADS",
-            ad_active_status: "ALL",
-            search_page_ids: args?.page_id || "",
-            limit: args?.limit || 25,
-          };
-          const fbResult = await fetchAdsFromFacebook(params, fbToken);
-          result = fbResult.error ? fbResult : {
-            page_id: args?.page_id || "",
-            ads_found: fbResult.data?.length || 0,
-            ads: fbResult.data || [],
-          };
-        }
+        // Use app access token for public Ad Library searches
+        const pageParams = {
+          ad_type: "ALL", // Changed from POLITICAL_AND_ISSUE_ADS to ALL
+          ad_active_status: "ALL",
+          search_page_ids: args?.page_id || "",
+          limit: args?.limit || 25,
+        };
+        // Pass null as token to use app access token
+        const pageResult = await fetchAdsFromFacebook(pageParams, null);
+        result = pageResult.error ? pageResult : {
+          page_id: args?.page_id || "",
+          ads_found: pageResult.data?.length || 0,
+          ads: pageResult.data || [],
+        };
         break;
         
       default:
