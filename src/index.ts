@@ -463,13 +463,8 @@ app.get("/test-oauth", (req, res) => {
   `);
 });
 
-// Root endpoint for OAuth flow
-app.get("/", (req, res) => {
-  console.log("🏠 Root endpoint accessed:", req.query);
-  // If this is part of OAuth flow, redirect to login
-  if (req.query.state || req.query.code) {
-    return res.redirect('/login');
-  }
+// API info endpoint
+app.get("/api/info", (req, res) => {
   res.json({ 
     service: "Drivenmetrics MCP Server",
     version: "1.0.0",
