@@ -182,9 +182,14 @@
             <a href="#" onclick="toggleMode(event)" id="toggleLink">Sign Up</a>
         </div>
         
+        <div class="toggle-mode" style="margin-top: 10px;">
+            <a href="#" onclick="resetPassword(event)" id="resetLink">Forgot your password?</a>
+        </div>
+        
+        <div id="resetMessage" style="margin-top: 15px; text-align: center;"></div>
         
         <div class="info">
-            Connecting to Claude.ai MCP Server
+            Crafted with ❤️ & 🤖 by Growthers
         </div>
     </div>
     
@@ -207,6 +212,38 @@
                 submitButton.textContent = 'Sign In';
                 toggleText.textContent = "Don't have an account?";
                 toggleLink.textContent = 'Sign Up';
+            }
+        }
+        
+        async function resetPassword(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const messageDiv = document.getElementById('resetMessage');
+            
+            if (!email) {
+                messageDiv.style.color = '#ff4444';
+                messageDiv.textContent = 'Please enter your email address first';
+                return;
+            }
+            
+            try {
+                const res = await fetch('/reset-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    messageDiv.style.color = '#44ff44';
+                    messageDiv.textContent = data.message || 'Password reset email sent. Please check your inbox.';
+                } else {
+                    messageDiv.style.color = '#ff4444';
+                    messageDiv.textContent = data.error || 'Failed to send reset email';
+                }
+            } catch (error) {
+                messageDiv.style.color = '#ff4444';
+                messageDiv.textContent = 'Network error. Please try again.';
             }
         }
     </script>

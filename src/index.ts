@@ -926,12 +926,14 @@ app.get("/authorize", (req, res) => {
           .forgot-link a { color: #0066ff; text-decoration: none; font-size: 0.9rem; }
           .forgot-link a:hover { text-decoration: underline; }
           #resetMessage { text-align: center; margin-top: 1rem; }
+          .footer { text-align: center; margin-top: 2rem; color: #666; font-size: 0.85rem; }
+          .footer .heart { color: #ff4444; }
         </style>
       </head>
       <body>
         <div class="login-box">
           <h2>Sign in to Drivenmetrics</h2>
-          <p style="text-align: center; color: #999;">Authorize Claude.ai to access your account</p>
+          <p style="text-align: center; color: #999;">Sign in to your account</p>
           <form method="POST" action="/login">
             <input type="hidden" name="state" value="${stateId}">
             <input type="email" name="email" id="email" placeholder="Email" required>
@@ -942,7 +944,9 @@ app.get("/authorize", (req, res) => {
             <a href="#" onclick="resetPassword(); return false;">Forgot your password?</a>
           </div>
           <div id="resetMessage"></div>
-          ${!supabase ? '<div class="info">Demo mode: Use any email/password</div>' : ''}
+          <div class="footer">
+            Crafted with <span class="heart">❤️</span>  e AI  by Growthers
+          </div>
           <script>
             async function resetPassword() {
               const email = document.getElementById('email').value;
