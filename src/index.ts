@@ -1238,6 +1238,17 @@ app.get("/update-password", (req, res) => {
             <div id="message"></div>
           </form>
           <script>
+            // Extract access token from URL hash
+            let accessToken = null;
+            if (window.location.hash) {
+              const params = new URLSearchParams(window.location.hash.substring(1));
+              accessToken = params.get('access_token');
+              if (!accessToken) {
+                document.getElementById('message').className = 'error';
+                document.getElementById('message').textContent = 'Invalid or expired reset link';
+              }
+            }
+            
             document.getElementById('updateForm').onsubmit = async (e) => {
               e.preventDefault();
               const password = document.getElementById('password').value;
@@ -1250,10 +1261,19 @@ app.get("/update-password", (req, res) => {
                 return;
               }
               
+              if (!accessToken) {
+                messageDiv.className = 'error';
+                messageDiv.textContent = 'Invalid or expired reset link';
+                return;
+              }
+              
               try {
                 const res = await fetch('/api/update-password', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + accessToken
+                  },
                   body: JSON.stringify({ password })
                 });
                 
@@ -1295,16 +1315,26 @@ app.post("/api/update-password", async (req, res) => {
   
   const accessToken = authHeader.slice(7);
   
-  if (supabase) {
+  if (supabase_anon) {
     try {
-      // Update password using the access token from email
-      const { error } = await supabase.auth.updateUser({
+      // First, set the session with the access token
+      const { data: { user }, error: sessionError } = await supabase_anon.auth.getUser(accessToken);
+      
+      if (sessionError || !user) {
+        console.error("Session error:", sessionError);
+        return res.status(401).json({ error: "Invalid or expired reset token" });
+      }
+      
+      // Now update the password using the anon client with the user's token
+      const { data, error } = await supabase_anon.auth.updateUser({
         password: password
+      }, {
+        accessToken: accessToken
       });
       
       if (error) {
         console.error("Password update error:", error);
-        return res.status(400).json({ error: "Failed to update password" });
+        return res.status(400).json({ error: error.message || "Failed to update password" });
       }
       
       return res.json({ success: true, message: "Password updated successfully" });
