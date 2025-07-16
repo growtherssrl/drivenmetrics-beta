@@ -1466,16 +1466,23 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
         console.log("New user created:", userId);
       }
       
-      // Store Facebook token
-      await supabase
-        .from("user_providers")
+      // Store Facebook token in facebook_tokens table
+      console.log("Storing Facebook token for user:", userId);
+      const { error: tokenError } = await supabase
+        .from("facebook_tokens")
         .upsert({
           user_id: userId,
-          provider: 'facebook',
-          provider_user_id: fbUser.id,
           access_token: access_token,
+          service: 'competition',
+          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
+      
+      if (tokenError) {
+        console.error("Error storing Facebook token:", tokenError);
+      } else {
+        console.log("✅ Facebook token stored successfully");
+      }
     }
     
     // Create session
@@ -1498,23 +1505,39 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
       // This was part of an OAuth flow
       const oauthState = oauthStates.get(state as string);
       if (oauthState) {
-        // Generate authorization code
-        const authCode = crypto.randomBytes(32).toString('hex');
-        oauthStates.set(authCode, {
-          ...oauthState,
-          user_id: userId || fbUser.id,
-          created_at: Date.now()
-        });
-        
-        // Clean up state
-        oauthStates.delete(state as string);
-        
-        // Redirect back with code
-        const redirectUrl = new URL(oauthState.redirect_uri);
-        redirectUrl.searchParams.set('code', authCode);
-        redirectUrl.searchParams.set('state', oauthState.state);
-        
-        return res.redirect(redirectUrl.toString());
+        // Check if this is a Facebook-only auth or part of Claude.ai OAuth
+        if (oauthState.type === 'facebook') {
+          // Facebook-only auth, clean up and redirect
+          oauthStates.delete(state as string);
+          
+          // Facebook token already stored above, no need to duplicate
+          
+          // Check if there was a pending OAuth state
+          if (oauthState.pending_oauth_state) {
+            return res.redirect(`/setup/integrations?oauth_state=${oauthState.pending_oauth_state}&success=facebook`);
+          } else {
+            return res.redirect('/setup/integrations?success=facebook');
+          }
+        } else if (oauthState.redirect_uri) {
+          // This is part of a full OAuth flow
+          // Generate authorization code
+          const authCode = crypto.randomBytes(32).toString('hex');
+          oauthStates.set(authCode, {
+            ...oauthState,
+            user_id: userId || fbUser.id,
+            created_at: Date.now()
+          });
+          
+          // Clean up state
+          oauthStates.delete(state as string);
+          
+          // Redirect back with code
+          const redirectUrl = new URL(oauthState.redirect_uri);
+          redirectUrl.searchParams.set('code', authCode);
+          redirectUrl.searchParams.set('state', oauthState.state);
+          
+          return res.redirect(redirectUrl.toString());
+        }
       }
     }
     
