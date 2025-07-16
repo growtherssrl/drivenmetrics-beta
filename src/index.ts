@@ -1315,28 +1315,31 @@ app.post("/api/update-password", async (req, res) => {
   
   const accessToken = authHeader.slice(7);
   
-  if (supabase) {
+  if (SUPABASE_URL && SUPABASE_ANON_KEY) {
     try {
-      // First set the session with the access token
-      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: '' // We don't have refresh token in password reset flow
+      console.log("Attempting password update with token:", accessToken.substring(0, 20) + "...");
+      
+      // Use the Supabase REST API directly with the recovery token
+      const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ password })
       });
       
-      if (sessionError || !sessionData.session) {
-        console.error("Session error:", sessionError);
-        return res.status(401).json({ error: "Invalid or expired reset token" });
+      const responseData = await response.json();
+      
+      if (!response.ok) {
+        console.error("Supabase API error:", response.status, responseData);
+        return res.status(400).json({ 
+          error: responseData.message || responseData.msg || responseData.error_description || "Failed to update password" 
+        });
       }
       
-      // Now update the password with the active session
-      const { data, error } = await supabase.auth.updateUser({
-        password: password
-      });
-      
-      if (error) {
-        console.error("Password update error:", error);
-        return res.status(400).json({ error: error.message || "Failed to update password" });
-      }
+      console.log("Password update successful");
       
       return res.json({ success: true, message: "Password updated successfully" });
     } catch (error) {
