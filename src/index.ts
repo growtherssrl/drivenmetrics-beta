@@ -26,14 +26,78 @@ const FB_APP_SECRET = process.env.FB_APP_SECRET || "";
 const FB_GRAPH_VERSION = "v21.0";
 const DEFAULT_AD_COUNTRY = process.env.DEFAULT_AD_COUNTRY || "IT"; // Default country for ad searches
 
-// Initialize Supabase
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+// Initialize Supabase with service role key
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  },
+  db: {
+    schema: 'public'
+  },
+  global: {
+    headers: {
+      'apikey': SUPABASE_KEY
+    }
+  }
+});
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("❌ ERROR: Supabase configuration missing!");
   console.error("  - SUPABASE_URL:", SUPABASE_URL ? "Set" : "Missing");
   console.error("  - SUPABASE_KEY:", SUPABASE_KEY ? "Set" : "Missing");
   console.error("  - Server requires proper Supabase configuration");
+} else {
+  // Log key type for debugging (first 20 chars only for security)
+  console.log("✅ Supabase initialized with key starting:", SUPABASE_KEY.substring(0, 20) + "...");
+  console.log("  - Key length:", SUPABASE_KEY.length);
+  console.log("  - IMPORTANT: This should be the SERVICE ROLE key, not the ANON key!");
+  
+  // Test database access
+  (async () => {
+    try {
+      // Test read access
+      const { data: readData, error: readError } = await supabase
+        .from("api_tokens")
+        .select("token")
+        .limit(1);
+      
+      if (readError) {
+        console.error("❌ Database READ test failed:", readError);
+      } else {
+        console.log("✅ Database connection verified - can read api_tokens table");
+      }
+      
+      // Test write access to facebook_tokens
+      const testData = {
+        user_id: "test-user-" + Date.now(),
+        access_token: "test-token",
+        service: "test",
+        updated_at: new Date().toISOString()
+      };
+      
+      console.log("🧪 Testing write access to facebook_tokens table...");
+      const { data: writeData, error: writeError } = await supabase
+        .from("facebook_tokens")
+        .insert(testData);
+      
+      if (writeError) {
+        console.error("❌ Facebook tokens WRITE test failed:", writeError);
+        if (writeError.code === '42501') {
+          console.error("   → RLS policy is blocking writes even with service role key!");
+        }
+      } else {
+        console.log("✅ Can write to facebook_tokens table");
+        // Clean up test data
+        await supabase
+          .from("facebook_tokens")
+          .delete()
+          .eq("user_id", testData.user_id);
+      }
+    } catch (e) {
+      console.error("❌ Database test error:", e);
+    }
+  })();
 }
 
 // Express app
@@ -1482,21 +1546,67 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
       
       // Store Facebook token in facebook_tokens table
       console.log("Storing Facebook token for user:", userId);
+      
+      // Log the exact data being saved
+      const tokenData = {
+        user_id: userId,
+        access_token: access_token,
+        service: 'competition',
+        updated_at: new Date().toISOString()
+      };
+      console.log("Facebook token data to be saved:", {
+        user_id: tokenData.user_id,
+        access_token: `${tokenData.access_token.substring(0, 10)}...${tokenData.access_token.substring(tokenData.access_token.length - 10)}`, // Log partial token for security
+        service: tokenData.service,
+        updated_at: tokenData.updated_at,
+        token_length: tokenData.access_token.length
+      });
+      
+      // Delete existing token first to work around RLS issues
+      const { error: deleteError } = await supabase
+        .from("facebook_tokens")
+        .delete()
+        .eq("user_id", userId)
+        .eq("service", "competition");
+      
+      if (deleteError && deleteError.code !== 'PGRST116') { // PGRST116 = no rows to delete, which is fine
+        console.error("Error deleting existing Facebook token:", deleteError);
+      }
+      
+      // Now insert the new token
       const { error: tokenError } = await supabase
         .from("facebook_tokens")
-        .upsert({
-          user_id: userId,
-          access_token: access_token,
-          service: 'competition',
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,service'
-        });
+        .insert(tokenData);
       
       if (tokenError) {
-        console.error("Error storing Facebook token:", tokenError);
+        // Check for RLS error (insufficient permissions)
+        if (tokenError.code === '42501') {
+          console.error("❌ RLS PERMISSION ERROR: Cannot store Facebook token", {
+            error: "Row Level Security (RLS) is blocking the operation",
+            solution: "You need to use the SERVICE ROLE key, not the ANON key!",
+            details: "The SUPABASE_KEY environment variable must be set to your service role key",
+            current_key_type: SUPABASE_KEY.startsWith('eyJ') ? 'Looks like ANON key' : 'Unknown key type',
+            help: "Find your service role key in Supabase Dashboard > Settings > API > service_role (secret)",
+            user_id: userId,
+            service: 'competition'
+          });
+        } else {
+          console.error("Error storing Facebook token - Full error details:", {
+            message: tokenError.message,
+            details: tokenError.details,
+            hint: tokenError.hint,
+            code: tokenError.code,
+            user_id: userId,
+            service: 'competition',
+            timestamp: new Date().toISOString()
+          });
+        }
       } else {
-        console.log("✅ Facebook token stored successfully");
+        console.log("✅ Facebook token stored successfully", {
+          user_id: userId,
+          service: 'competition',
+          timestamp: new Date().toISOString()
+        });
       }
     }
     
@@ -2012,18 +2122,45 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
       
       if (access_token && supabase) {
         // Save Facebook token
-        await supabase
+        // Delete existing token first to work around RLS issues
+        const { error: deleteError } = await supabase
           .from("facebook_tokens")
-          .upsert({
+          .delete()
+          .eq("user_id", userId)
+          .eq("service", "competition");
+        
+        if (deleteError && deleteError.code !== 'PGRST116') { // PGRST116 = no rows to delete, which is fine
+          console.error("Error deleting existing Facebook token:", deleteError);
+        }
+        
+        // Now insert the new token
+        const { error: tokenError } = await supabase
+          .from("facebook_tokens")
+          .insert({
             user_id: userId,
             access_token: access_token,
             service: "competition",
             updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id,service'
           });
         
-        console.log("✅ Facebook token saved for user:", userId);
+        if (tokenError) {
+          // Check for RLS error (insufficient permissions)
+          if (tokenError.code === '42501') {
+            console.error("❌ RLS PERMISSION ERROR: Cannot store Facebook token", {
+              error: "Row Level Security (RLS) is blocking the operation",
+              solution: "You need to use the SERVICE ROLE key, not the ANON key!",
+              details: "The SUPABASE_KEY environment variable must be set to your service role key",
+              current_key_type: SUPABASE_KEY.startsWith('eyJ') ? 'Looks like ANON key' : 'Unknown key type',
+              help: "Find your service role key in Supabase Dashboard > Settings > API > service_role (secret)",
+              user_id: userId,
+              service: 'competition'
+            });
+          } else {
+            console.error("Error storing Facebook token:", tokenError);
+          }
+        } else {
+          console.log("✅ Facebook token saved for user:", userId);
+        }
       }
       
       // Check if there's a pending OAuth flow from the original state
