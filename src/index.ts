@@ -16,6 +16,36 @@ import cookieParser from "cookie-parser";
 
 dotenv.config();
 
+// Helper function to detect Supabase key type
+function getSupabaseKeyType(key: string): 'anon' | 'service_role' | 'unknown' {
+  if (!key || !key.startsWith('eyJ')) {
+    return 'unknown';
+  }
+  
+  try {
+    // JWT tokens have 3 parts separated by dots: header.payload.signature
+    const parts = key.split('.');
+    if (parts.length !== 3) {
+      return 'unknown';
+    }
+    
+    // Decode the payload (second part)
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+    
+    // Check the role claim
+    if (payload.role === 'anon') {
+      return 'anon';
+    } else if (payload.role === 'service_role') {
+      return 'service_role';
+    }
+    
+    return 'unknown';
+  } catch (error) {
+    console.error('Error decoding JWT:', error);
+    return 'unknown';
+  }
+}
+
 // Configuration
 const PORT = process.env.PORT || 3000;
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -49,9 +79,20 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("  - Server requires proper Supabase configuration");
 } else {
   // Log key type for debugging (first 20 chars only for security)
+  const keyType = getSupabaseKeyType(SUPABASE_KEY);
   console.log("✅ Supabase initialized with key starting:", SUPABASE_KEY.substring(0, 20) + "...");
   console.log("  - Key length:", SUPABASE_KEY.length);
-  console.log("  - IMPORTANT: This should be the SERVICE ROLE key, not the ANON key!");
+  console.log("  - Key type detected:", keyType.toUpperCase());
+  
+  if (keyType === 'anon') {
+    console.error("  - ⚠️  WARNING: You are using an ANON key! This will cause RLS permission errors.");
+    console.error("  - ⚠️  You MUST use the SERVICE ROLE key for this server to work properly.");
+    console.error("  - ⚠️  Find your service role key in Supabase Dashboard > Settings > API > service_role (secret)");
+  } else if (keyType === 'service_role') {
+    console.log("  - ✅ Correct key type! Using SERVICE ROLE key as required.");
+  } else {
+    console.log("  - ⚠️  Could not determine key type. Make sure you're using the SERVICE ROLE key!");
+  }
   
   // Test database access
   (async () => {
@@ -77,14 +118,33 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
       };
       
       console.log("🧪 Testing write access to facebook_tokens table...");
+      
+      // First try to delete any existing test data
+      await supabase
+        .from("facebook_tokens")
+        .delete()
+        .eq("user_id", testData.user_id)
+        .eq("service", testData.service);
+      
+      // Now try to insert
       const { data: writeData, error: writeError } = await supabase
         .from("facebook_tokens")
         .insert(testData);
       
       if (writeError) {
         console.error("❌ Facebook tokens WRITE test failed:", writeError);
+        console.error("   Full error details:", {
+          code: writeError.code,
+          message: writeError.message,
+          details: writeError.details,
+          hint: writeError.hint
+        });
+        
         if (writeError.code === '42501') {
           console.error("   → RLS policy is blocking writes even with service role key!");
+          console.error("   → This suggests the RLS policy needs to be updated in the database");
+          console.error("   → Run this SQL in Supabase SQL Editor:");
+          console.error("   → ALTER TABLE facebook_tokens DISABLE ROW LEVEL SECURITY;");
         }
       } else {
         console.log("✅ Can write to facebook_tokens table");
@@ -1585,7 +1645,7 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
             error: "Row Level Security (RLS) is blocking the operation",
             solution: "You need to use the SERVICE ROLE key, not the ANON key!",
             details: "The SUPABASE_KEY environment variable must be set to your service role key",
-            current_key_type: SUPABASE_KEY.startsWith('eyJ') ? 'Looks like ANON key' : 'Unknown key type',
+            current_key_type: `Using ${getSupabaseKeyType(SUPABASE_KEY)} key`,
             help: "Find your service role key in Supabase Dashboard > Settings > API > service_role (secret)",
             user_id: userId,
             service: 'competition'
@@ -2150,7 +2210,7 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
               error: "Row Level Security (RLS) is blocking the operation",
               solution: "You need to use the SERVICE ROLE key, not the ANON key!",
               details: "The SUPABASE_KEY environment variable must be set to your service role key",
-              current_key_type: SUPABASE_KEY.startsWith('eyJ') ? 'Looks like ANON key' : 'Unknown key type',
+              current_key_type: `Using ${getSupabaseKeyType(SUPABASE_KEY)} key`,
               help: "Find your service role key in Supabase Dashboard > Settings > API > service_role (secret)",
               user_id: userId,
               service: 'competition'
