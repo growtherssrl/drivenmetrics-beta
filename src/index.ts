@@ -129,11 +129,6 @@ async function getFacebookToken(userId: string): Promise<string | null> {
 
 // Get Facebook App Access Token
 async function getAppAccessToken(): Promise<string | null> {
-  // Temporary: use hardcoded token for testing
-  console.log("Using hardcoded App Access Token for testing");
-  return "487381020448229|mKKyiFgHrHva79OycRJvGjxcfCg";
-  
-  /* Original code - commented for testing
   if (!FB_APP_ID || !FB_APP_SECRET) {
     console.error("Facebook App ID or Secret not configured");
     return null;
@@ -155,7 +150,6 @@ async function getAppAccessToken(): Promise<string | null> {
     console.error("Error getting app access token:", error.response?.data || error.message);
     return null;
   }
-  */
 }
 
 // Facebook API helper
@@ -186,7 +180,27 @@ async function fetchAdsFromFacebook(params: any, fbToken: string | null): Promis
     return response.data;
   } catch (error: any) {
     console.error("Facebook API error:", error.response?.data || error.message);
-    return { error: error.response?.data?.error?.message || "Facebook API error" };
+    
+    // Check if it's a permission error
+    if (error.response?.data?.error?.code === 10) {
+      const errorMsg = error.response.data.error;
+      return { 
+        error: "Facebook Ad Library API Access Required",
+        message: "To use the Facebook Ad Library API, you need to request access at: https://www.facebook.com/ads/library/api",
+        details: errorMsg.error_user_msg || errorMsg.message,
+        instructions: [
+          "1. Visit https://www.facebook.com/ads/library/api",
+          "2. Click 'Get Started' and follow the verification process",
+          "3. Once approved, reconnect your Facebook account in the integrations page",
+          "4. Make sure your Facebook account has ads_read permission"
+        ]
+      };
+    }
+    
+    return { 
+      error: error.response?.data?.error?.message || "Facebook API error",
+      details: error.response?.data || error.message 
+    };
   }
 }
 
@@ -1474,10 +1488,9 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
           user_id: userId,
           access_token: access_token,
           service: 'competition',
-          facebook_user_id: fbUser.id,
           updated_at: new Date().toISOString()
         }, {
-          onConflict: 'user_id'
+          onConflict: 'user_id,service'
         });
       
       if (tokenError) {
@@ -1688,6 +1701,7 @@ app.get("/dashboard", async (req, res) => {
   let hasClaude = false;
   let apiCalls = 0;
   let apiToken = null;
+  let facebookToken = null;
   
   if (supabase) {
     try {
@@ -1699,6 +1713,9 @@ app.get("/dashboard", async (req, res) => {
         .eq("service", "competition")
         .single();
       hasFacebook = !!fbData;
+      if (fbData) {
+        facebookToken = fbData.access_token;
+      }
       
       // Check Claude connection (API tokens)
       const { data: tokenData } = await supabase
@@ -1738,7 +1755,8 @@ app.get("/dashboard", async (req, res) => {
       has_facebook: hasFacebook,
       has_claude: hasClaude,
       api_calls: apiCalls,
-      api_token: apiToken
+      api_token: apiToken,
+      facebook_token: facebookToken
     });
   } catch (err) {
     console.error('Dashboard template error:', err);
@@ -2001,6 +2019,8 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
             access_token: access_token,
             service: "competition",
             updated_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id,service'
           });
         
         console.log("✅ Facebook token saved for user:", userId);
