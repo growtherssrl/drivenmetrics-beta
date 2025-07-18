@@ -219,6 +219,13 @@
     </style>
 </head>
 <body>
+    <div style="background: #1a1a1a; border-bottom: 1px solid #333; padding: 1rem 0;">
+        <div style="max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between;">
+            <img src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" alt="Drivenmetrics" style="height: 32px;">
+            <a href="/dashboard" style="color: #999; text-decoration: none; font-size: 0.9rem;">← Back to Dashboard</a>
+        </div>
+    </div>
+    
     <div class="container">
         <div class="header">
             <h1>🔍 Deep Marketing Analysis</h1>
@@ -272,20 +279,6 @@
     
     <script>
         let currentSearchId = null;
-        let n8nWebhookUrl = '<%= n8n_webhook_url || "" %>';
-        
-        // Configure n8n webhook URL (you can set this from environment or config)
-        if (!n8nWebhookUrl) {
-            n8nWebhookUrl = prompt('Inserisci l\'URL del webhook n8n:', 'https://your-n8n-instance.com/webhook/deep-marketing');
-            if (n8nWebhookUrl) {
-                localStorage.setItem('n8n_webhook_url', n8nWebhookUrl);
-            }
-        }
-        
-        // Load saved webhook URL
-        if (!n8nWebhookUrl && localStorage.getItem('n8n_webhook_url')) {
-            n8nWebhookUrl = localStorage.getItem('n8n_webhook_url');
-        }
         
         function showStatus(message, type = 'info') {
             const statusEl = document.getElementById('statusMessage');
@@ -307,11 +300,6 @@
                 return;
             }
             
-            if (!n8nWebhookUrl) {
-                showStatus('URL webhook n8n non configurato', 'error');
-                return;
-            }
-            
             const analyzeBtn = document.getElementById('analyzeBtn');
             analyzeBtn.disabled = true;
             analyzeBtn.innerHTML = '<span class="loading"></span> Creazione piano...';
@@ -325,7 +313,6 @@
                     },
                     body: JSON.stringify({
                         query: query,
-                        n8n_webhook: n8nWebhookUrl,
                         user_id: '<%= user?.user_id || "anonymous" %>'
                     })
                 });
@@ -397,8 +384,7 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        search_id: currentSearchId,
-                        n8n_webhook: n8nWebhookUrl
+                        search_id: currentSearchId
                     })
                 });
                 

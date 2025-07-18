@@ -289,6 +289,13 @@
                     <h3>Open Claude.ai</h3>
                     <p>Use Claude in your browser</p>
                 </a>
+                <% if (user.email === 'info@growthers.io') { %>
+                <a href="/admin/webhooks" class="action-card" style="border-color: #ff4444;">
+                    <div class="action-icon">🔐</div>
+                    <h3>Admin: Webhooks</h3>
+                    <p>Configure n8n webhooks</p>
+                </a>
+                <% } %>
             </div>
         </section>
 

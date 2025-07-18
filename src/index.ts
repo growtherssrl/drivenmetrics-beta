@@ -2509,6 +2509,86 @@ app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
   res.redirect(redirectUrl.toString());
 });
 
+// Admin webhook configuration route
+app.get("/admin/webhooks", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.redirect('/login?next=/admin/webhooks');
+  }
+  
+  const session = sessions.get(sessionId);
+  
+  // Check if user is admin (only info@growthers.io)
+  if (session.email !== 'info@growthers.io') {
+    return res.status(403).send('Access denied. Admin only.');
+  }
+  
+  try {
+    let webhooks = [];
+    
+    if (supabase) {
+      const { data, error } = await supabase
+        .from("webhook_config")
+        .select("*")
+        .order("service_name");
+      
+      if (data) {
+        webhooks = data;
+      }
+    } else {
+      // Default webhooks for demo
+      webhooks = [
+        {
+          service_name: 'deep_marketing_create_plan',
+          webhook_url: 'https://your-n8n.com/webhook/xxx',
+          description: 'Creates search plan from user query',
+          is_active: true
+        },
+        {
+          service_name: 'deep_marketing_execute_search',
+          webhook_url: 'https://your-n8n.com/webhook/yyy', 
+          description: 'Executes the search plan',
+          is_active: true
+        }
+      ];
+    }
+    
+    res.render('admin_webhooks', {
+      user: session,
+      webhooks: webhooks
+    });
+  } catch (err) {
+    console.error('Admin webhooks page error:', err);
+    res.status(500).send('Error loading admin page');
+  }
+});
+
+// Helper function to get webhook URL from database
+async function getWebhookUrl(serviceName: string): Promise<string | null> {
+  if (!supabase) {
+    // Return default URLs for demo
+    const defaults: any = {
+      'deep_marketing_create_plan': process.env.N8N_WEBHOOK_URL || 'https://your-n8n.com/webhook/xxx',
+      'deep_marketing_execute_search': process.env.N8N_WEBHOOK_URL_EXECUTE || 'https://your-n8n.com/webhook/yyy'
+    };
+    return defaults[serviceName] || null;
+  }
+  
+  try {
+    const { data, error } = await supabase
+      .from("webhook_config")
+      .select("webhook_url")
+      .eq("service_name", serviceName)
+      .eq("is_active", true)
+      .single();
+    
+    return data?.webhook_url || null;
+  } catch (error) {
+    console.error("Error fetching webhook URL:", error);
+    return null;
+  }
+}
+
 // Deep Marketing routes
 app.get("/deep-marketing", async (req, res) => {
   const sessionId = req.cookies?.session_id;
@@ -2532,17 +2612,133 @@ app.get("/deep-marketing", async (req, res) => {
 // Store active searches
 const activeSearches = new Map<string, any>();
 
-// Create search endpoint
+// Admin API endpoints
+app.post("/api/admin/webhooks/update", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const session = sessions.get(sessionId);
+  if (session.email !== 'info@growthers.io') {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  
+  const { service_name, webhook_url } = req.body;
+  
+  if (!service_name || !webhook_url) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+  
+  try {
+    if (supabase) {
+      const { error } = await supabase
+        .from("webhook_config")
+        .update({
+          webhook_url: webhook_url,
+          updated_at: new Date().toISOString()
+        })
+        .eq("service_name", service_name);
+      
+      if (error) throw error;
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error updating webhook:", error);
+    res.status(500).json({ error: "Failed to update webhook" });
+  }
+});
+
+app.post("/api/admin/webhooks/test", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const session = sessions.get(sessionId);
+  if (session.email !== 'info@growthers.io') {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  
+  const { webhook_url } = req.body;
+  
+  try {
+    const startTime = Date.now();
+    const testResponse = await axios.post(webhook_url, {
+      test: true,
+      timestamp: new Date().toISOString(),
+      source: 'drivenmetrics_admin_panel'
+    }, {
+      timeout: 5000
+    });
+    
+    const responseTime = Date.now() - startTime;
+    
+    res.json({
+      success: true,
+      responseTime: responseTime,
+      status: testResponse.status
+    });
+  } catch (error: any) {
+    res.json({
+      success: false,
+      error: error.message || "Connection failed"
+    });
+  }
+});
+
+app.post("/api/admin/webhooks/toggle", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const session = sessions.get(sessionId);
+  if (session.email !== 'info@growthers.io') {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  
+  const { service_name, is_active } = req.body;
+  
+  try {
+    if (supabase) {
+      const { error } = await supabase
+        .from("webhook_config")
+        .update({
+          is_active: is_active,
+          updated_at: new Date().toISOString()
+        })
+        .eq("service_name", service_name);
+      
+      if (error) throw error;
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error toggling webhook:", error);
+    res.status(500).json({ error: "Failed to toggle webhook" });
+  }
+});
+
+// Create search endpoint (modified to use webhook from DB)
 app.post("/api/deep-marketing/create-search", async (req, res) => {
   const sessionId = req.cookies?.session_id;
   if (!sessionId || !sessions.has(sessionId)) {
     return res.status(401).json({ error: "Not authenticated" });
   }
   
-  const { query, n8n_webhook, user_id } = req.body;
+  const { query, user_id } = req.body;
   
-  if (!query || !n8n_webhook) {
-    return res.status(400).json({ error: "Missing required fields" });
+  if (!query) {
+    return res.status(400).json({ error: "Missing query" });
+  }
+  
+  // Get webhook URL from database
+  const n8n_webhook = await getWebhookUrl('deep_marketing_create_plan');
+  
+  if (!n8n_webhook) {
+    return res.status(503).json({ error: "Webhook not configured. Please contact admin." });
   }
   
   const searchId = crypto.randomBytes(16).toString('hex');
@@ -2597,22 +2793,29 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
   }
 });
 
-// Execute search endpoint
+// Execute search endpoint (modified to use webhook from DB)
 app.post("/api/deep-marketing/execute-search", async (req, res) => {
   const sessionId = req.cookies?.session_id;
   if (!sessionId || !sessions.has(sessionId)) {
     return res.status(401).json({ error: "Not authenticated" });
   }
   
-  const { search_id, n8n_webhook } = req.body;
+  const { search_id } = req.body;
   
-  if (!search_id || !n8n_webhook) {
-    return res.status(400).json({ error: "Missing required fields" });
+  if (!search_id) {
+    return res.status(400).json({ error: "Missing search_id" });
   }
   
   const search = activeSearches.get(search_id);
   if (!search) {
     return res.status(404).json({ error: "Search not found" });
+  }
+  
+  // Get webhook URL from database
+  const n8n_webhook = await getWebhookUrl('deep_marketing_execute_search');
+  
+  if (!n8n_webhook) {
+    return res.status(503).json({ error: "Execute webhook not configured. Please contact admin." });
   }
   
   try {

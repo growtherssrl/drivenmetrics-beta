@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webhook Configuration - Admin Panel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        .admin-header {
+            background: #ff4444;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #cc0000;
+        }
+        
+        .admin-header h1 {
+            font-size: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .info-banner {
+            background: #1a1a1a;
+            border: 1px solid #ff4444;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .info-banner .icon {
+            font-size: 2rem;
+        }
+        
+        .webhook-grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+        
+        .webhook-card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 1.5rem;
+            transition: border-color 0.2s;
+        }
+        
+        .webhook-card:hover {
+            border-color: #0066ff;
+        }
+        
+        .webhook-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+        
+        .webhook-title {
+            font-size: 1.25rem;
+            color: #0066ff;
+            margin-bottom: 0.25rem;
+        }
+        
+        .webhook-description {
+            color: #999;
+            font-size: 0.9rem;
+        }
+        
+        .webhook-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .webhook-status.active {
+            background: #10b98133;
+            color: #4ade80;
+        }
+        
+        .webhook-status.inactive {
+            background: #ef444433;
+            color: #f87171;
+        }
+        
+        .webhook-url-group {
+            margin: 1rem 0;
+        }
+        
+        .webhook-url-label {
+            font-size: 0.9rem;
+            color: #999;
+            margin-bottom: 0.5rem;
+        }
+        
+        .webhook-url-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        
+        .webhook-url-input:focus {
+            outline: none;
+            border-color: #0066ff;
+        }
+        
+        .webhook-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: #0066ff;
+            color: #fff;
+        }
+        
+        .btn-primary:hover {
+            background: #0052cc;
+        }
+        
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+        
+        .btn-secondary:hover {
+            background: #444;
+        }
+        
+        .btn-danger {
+            background: #ff4444;
+            color: #fff;
+        }
+        
+        .btn-danger:hover {
+            background: #cc0000;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .add-webhook-section {
+            background: #1a1a1a;
+            border: 2px dashed #333;
+            border-radius: 12px;
+            padding: 2rem;
+            text-align: center;
+            margin-top: 2rem;
+        }
+        
+        .test-section {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+        
+        .test-result {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #0a0a0a;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            display: none;
+        }
+        
+        .test-result.success {
+            border: 1px solid #4ade80;
+            color: #4ade80;
+        }
+        
+        .test-result.error {
+            border: 1px solid #ff4444;
+            color: #ff9999;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #333;
+            border-top-color: #0066ff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 0.5rem;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #0066ff;
+            text-decoration: none;
+            margin-bottom: 2rem;
+        }
+        
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="admin-header">
+        <h1>🔐 Admin Panel - Webhook Configuration</h1>
+    </div>
+    
+    <div style="background: #1a1a1a; border-bottom: 1px solid #333; padding: 1rem 0;">
+        <div class="container" style="display: flex; align-items: center; justify-content: space-between;">
+            <img src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" alt="Drivenmetrics" style="height: 32px;">
+            <span style="color: #999; font-size: 0.9rem;">Webhook Management System</span>
+        </div>
+    </div>
+    
+    <div class="container">
+        <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+        
+        <div class="info-banner">
+            <div class="icon">⚠️</div>
+            <div>
+                <strong>Admin Access Only</strong><br>
+                Modifying webhooks will affect all users. Please test changes before saving.
+            </div>
+        </div>
+        
+        <div class="webhook-grid">
+            <% webhooks.forEach(webhook => { %>
+            <div class="webhook-card" data-service="<%= webhook.service_name %>">
+                <div class="webhook-header">
+                    <div>
+                        <h3 class="webhook-title"><%= webhook.service_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) %></h3>
+                        <p class="webhook-description"><%= webhook.description %></p>
+                    </div>
+                    <span class="webhook-status <%= webhook.is_active ? 'active' : 'inactive' %>">
+                        <%= webhook.is_active ? 'Active' : 'Inactive' %>
+                    </span>
+                </div>
+                
+                <div class="webhook-url-group">
+                    <div class="webhook-url-label">Webhook URL</div>
+                    <input 
+                        type="url" 
+                        class="webhook-url-input" 
+                        value="<%= webhook.webhook_url %>"
+                        data-original="<%= webhook.webhook_url %>"
+                        placeholder="https://your-n8n-instance.com/webhook/xxx"
+                    >
+                </div>
+                
+                <div class="webhook-actions">
+                    <button class="btn btn-primary" onclick="saveWebhook('<%= webhook.service_name %>')">
+                        Save Changes
+                    </button>
+                    <button class="btn btn-secondary" onclick="testWebhook('<%= webhook.service_name %>')">
+                        Test Connection
+                    </button>
+                    <button class="btn btn-secondary" onclick="toggleWebhook('<%= webhook.service_name %>', <%= !webhook.is_active %>)">
+                        <%= webhook.is_active ? 'Disable' : 'Enable' %>
+                    </button>
+                </div>
+            </div>
+            <% }); %>
+        </div>
+        
+        <div class="test-section">
+            <h3>🧪 Test All Webhooks</h3>
+            <p style="color: #999; margin: 0.5rem 0;">Send a test request to verify all webhook connections</p>
+            <button class="btn btn-primary" onclick="testAllWebhooks()">
+                Run Full Test
+            </button>
+            <div id="testResults" class="test-result"></div>
+        </div>
+    </div>
+    
+    <script>
+        async function saveWebhook(serviceName) {
+            const card = document.querySelector(`[data-service="${serviceName}"]`);
+            const input = card.querySelector('.webhook-url-input');
+            const newUrl = input.value.trim();
+            const originalUrl = input.dataset.original;
+            
+            if (newUrl === originalUrl) {
+                alert('No changes to save');
+                return;
+            }
+            
+            if (!newUrl || !newUrl.startsWith('http')) {
+                alert('Please enter a valid webhook URL');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/webhooks/update', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        service_name: serviceName,
+                        webhook_url: newUrl
+                    })
+                });
+                
+                if (response.ok) {
+                    input.dataset.original = newUrl;
+                    alert('Webhook updated successfully!');
+                } else {
+                    const error = await response.json();
+                    alert('Error: ' + (error.message || 'Failed to update webhook'));
+                }
+            } catch (error) {
+                alert('Network error: ' + error.message);
+            }
+        }
+        
+        async function testWebhook(serviceName) {
+            const card = document.querySelector(`[data-service="${serviceName}"]`);
+            const input = card.querySelector('.webhook-url-input');
+            const webhookUrl = input.value.trim();
+            
+            if (!webhookUrl) {
+                alert('Please enter a webhook URL first');
+                return;
+            }
+            
+            const button = event.target;
+            const originalText = button.textContent;
+            button.innerHTML = 'Testing<span class="loading"></span>';
+            button.disabled = true;
+            
+            try {
+                const response = await fetch('/api/admin/webhooks/test', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        service_name: serviceName,
+                        webhook_url: webhookUrl
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(`✅ Webhook is working!\n\nResponse time: ${result.responseTime}ms`);
+                } else {
+                    alert(`❌ Webhook test failed!\n\n${result.error}`);
+                }
+            } catch (error) {
+                alert('❌ Test failed: ' + error.message);
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+        
+        async function toggleWebhook(serviceName, activate) {
+            const action = activate ? 'activate' : 'deactivate';
+            
+            if (!confirm(`Are you sure you want to ${action} this webhook?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/admin/webhooks/toggle', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        service_name: serviceName,
+                        is_active: activate
+                    })
+                });
+                
+                if (response.ok) {
+                    window.location.reload();
+                } else {
+                    alert('Failed to update webhook status');
+                }
+            } catch (error) {
+                alert('Network error: ' + error.message);
+            }
+        }
+        
+        async function testAllWebhooks() {
+            const button = event.target;
+            const resultsDiv = document.getElementById('testResults');
+            
+            button.innerHTML = 'Testing<span class="loading"></span>';
+            button.disabled = true;
+            resultsDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/admin/webhooks/test-all', {
+                    method: 'POST'
+                });
+                
+                const results = await response.json();
+                
+                let resultText = '=== Webhook Test Results ===\n\n';
+                let allSuccess = true;
+                
+                for (const [service, result] of Object.entries(results)) {
+                    if (result.success) {
+                        resultText += `✅ ${service}: OK (${result.responseTime}ms)\n`;
+                    } else {
+                        resultText += `❌ ${service}: ${result.error}\n`;
+                        allSuccess = false;
+                    }
+                }
+                
+                resultsDiv.textContent = resultText;
+                resultsDiv.className = `test-result ${allSuccess ? 'success' : 'error'}`;
+                resultsDiv.style.display = 'block';
+                
+            } catch (error) {
+                resultsDiv.textContent = '❌ Test failed: ' + error.message;
+                resultsDiv.className = 'test-result error';
+                resultsDiv.style.display = 'block';
+            } finally {
+                button.innerHTML = 'Run Full Test';
+                button.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
