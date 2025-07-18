@@ -1302,11 +1302,27 @@ app.post("/login", express_1.default.urlencoded({ extended: true }), async (req,
             supabase: !!supabase
         });
     }
+    // Get user info including admin status
+    let isAdmin = false;
+    if (supabase && userId) {
+        try {
+            const { data: userData } = await supabase
+                .from("users")
+                .select("is_admin")
+                .eq("user_id", userId)
+                .single();
+            isAdmin = userData?.is_admin || false;
+        }
+        catch (error) {
+            console.log("Error fetching admin status:", error);
+        }
+    }
     // Create session
     const sessionId = crypto_1.default.randomBytes(32).toString('hex');
     sessions.set(sessionId, {
         user_id: userId,
         email: email,
+        is_admin: isAdmin,
         created_at: Date.now()
     });
     // Set session cookie
@@ -2267,6 +2283,26 @@ app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
     console.log("✅ Completing OAuth flow, redirecting to Claude.ai");
     res.redirect(redirectUrl.toString());
 });
+// Debug route to check session
+app.get("/debug/session", (req, res) => {
+    const sessionId = req.cookies?.session_id;
+    if (!sessionId) {
+        return res.json({ error: "No session cookie found" });
+    }
+    const session = sessions.get(sessionId);
+    if (!session) {
+        return res.json({
+            error: "Session not found in memory",
+            sessionId: sessionId,
+            activeSessions: Array.from(sessions.keys()).length
+        });
+    }
+    res.json({
+        session: session,
+        isAdmin: session.email === 'info@growthers.io',
+        adminEmail: process.env.ADMIN_EMAIL || 'info@growthers.io'
+    });
+});
 // Admin webhook configuration route
 app.get("/admin/webhooks", async (req, res) => {
     const sessionId = req.cookies?.session_id;
@@ -2274,9 +2310,11 @@ app.get("/admin/webhooks", async (req, res) => {
         return res.redirect('/login?next=/admin/webhooks');
     }
     const session = sessions.get(sessionId);
-    // Check if user is admin (only info@growthers.io)
-    if (session.email !== 'info@growthers.io') {
-        return res.status(403).send('Access denied. Admin only.');
+    console.log("[ADMIN] Session data:", session);
+    // Check if user is admin
+    if (!session.is_admin) {
+        console.log("[ADMIN] Access denied for non-admin user:", session.email);
+        return res.status(403).send(`Access denied. Admin privileges required.`);
     }
     try {
         let webhooks = [];
@@ -2367,7 +2405,7 @@ app.post("/api/admin/webhooks/update", async (req, res) => {
         return res.status(401).json({ error: "Not authenticated" });
     }
     const session = sessions.get(sessionId);
-    if (session.email !== 'info@growthers.io') {
+    if (!session.is_admin) {
         return res.status(403).json({ error: "Admin access required" });
     }
     const { service_name, webhook_url } = req.body;
@@ -2399,7 +2437,7 @@ app.post("/api/admin/webhooks/test", async (req, res) => {
         return res.status(401).json({ error: "Not authenticated" });
     }
     const session = sessions.get(sessionId);
-    if (session.email !== 'info@growthers.io') {
+    if (!session.is_admin) {
         return res.status(403).json({ error: "Admin access required" });
     }
     const { webhook_url } = req.body;
@@ -2432,7 +2470,7 @@ app.post("/api/admin/webhooks/toggle", async (req, res) => {
         return res.status(401).json({ error: "Not authenticated" });
     }
     const session = sessions.get(sessionId);
-    if (session.email !== 'info@growthers.io') {
+    if (!session.is_admin) {
         return res.status(403).json({ error: "Admin access required" });
     }
     const { service_name, is_active } = req.body;
