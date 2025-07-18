@@ -2853,31 +2853,48 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
     }, {
       timeout: 30000, // 30 secondi timeout
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      responseType: 'json'
     });
     
     console.log("[CREATE-SEARCH] n8n response status:", n8nResponse.status);
+    console.log("[CREATE-SEARCH] n8n response headers:", n8nResponse.headers);
+    console.log("[CREATE-SEARCH] n8n response data type:", typeof n8nResponse.data);
     console.log("[CREATE-SEARCH] n8n response data:", JSON.stringify(n8nResponse.data));
+    
+    // Handle different response types
+    let responseData = n8nResponse.data;
+    
+    // If response is a string, try to parse it
+    if (typeof responseData === 'string') {
+      try {
+        responseData = JSON.parse(responseData);
+        console.log("[CREATE-SEARCH] Parsed string response:", responseData);
+      } catch (e) {
+        console.error("[CREATE-SEARCH] Failed to parse string response:", e);
+      }
+    }
     
     // Extract plan from n8n response
     // n8n returns an array with the plan object
     let planData = {};
     
     // Check if response has data
-    if (!n8nResponse.data || (typeof n8nResponse.data === 'string' && n8nResponse.data.trim() === '')) {
+    if (!responseData || (typeof responseData === 'string' && responseData.trim() === '')) {
       console.error("[CREATE-SEARCH] Empty response from n8n");
       throw new Error("n8n webhook returned empty response. Please check n8n workflow configuration.");
     }
     
-    if (Array.isArray(n8nResponse.data) && n8nResponse.data.length > 0) {
-      planData = n8nResponse.data[0].plan || n8nResponse.data[0];
-    } else if (n8nResponse.data.plan) {
-      planData = n8nResponse.data.plan;
-    } else if (typeof n8nResponse.data === 'object') {
-      planData = n8nResponse.data;
+    if (Array.isArray(responseData) && responseData.length > 0) {
+      planData = responseData[0].plan || responseData[0];
+    } else if (responseData.plan) {
+      planData = responseData.plan;
+    } else if (typeof responseData === 'object') {
+      planData = responseData;
     } else {
-      console.error("[CREATE-SEARCH] Unexpected response format:", n8nResponse.data);
+      console.error("[CREATE-SEARCH] Unexpected response format:", responseData);
       throw new Error("Invalid response format from n8n webhook");
     }
     
