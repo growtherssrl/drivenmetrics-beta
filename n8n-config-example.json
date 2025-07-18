@@ -1,0 +1,44 @@
+{
+  "name": "Facebook Ads Library Search",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://mcp.drivenmetrics.com/mcp-api/sse",
+        "options": {
+          "headers": {
+            "Authorization": "Bearer dmgt_db4d72323f564a759d3cabd725a60074"
+          }
+        },
+        "eventsToListenTo": [
+          "message",
+          "data"
+        ]
+      },
+      "name": "MCP Server Connection",
+      "type": "n8n-nodes-base.sseClient",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "content": "## System Message per n8n AI Agent\n\nSei un esperto di analisi pubblicitaria Facebook. Hai accesso ai seguenti tool:\n\n1. **check_auth_status** - Verifica lo stato di autenticazione\n2. **search_competitor_ads** - Cerca annunci per parole chiave\n   - Parametri: keywords (testo da cercare), country (codice paese, default IT), limit (numero risultati)\n3. **search_ads_by_page** - Cerca annunci di una specifica pagina Facebook\n   - Parametri: page_id (ID o nome pagina), limit (numero risultati)\n\nQuando l'utente chiede di cercare annunci, usa sempre questi tool per ottenere dati reali e attuali.",
+        "height": 300
+      },
+      "name": "System Message",
+      "type": "n8n-nodes-base.markdown",
+      "typeVersion": 1,
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "content": "## Esempio di utilizzo con AI Agent\n\n### Prompt suggeriti:\n1. \"Cerca annunci Facebook per spray nasali in Italia\"\n2. \"Mostrami gli ultimi annunci della pagina Nike\"\n3. \"Trova pubblicità di scarpe verdi\"\n4. \"Analizza gli annunci dei competitor nel settore marketing digitale\"\n\n### Formato risposta tool:\n```json\n{\n  \"name\": \"search_competitor_ads\",\n  \"arguments\": {\n    \"keywords\": \"spray nasale\",\n    \"country\": \"IT\",\n    \"limit\": 10\n  }\n}\n```",
+        "height": 400
+      },
+      "name": "Usage Examples",
+      "type": "n8n-nodes-base.markdown",
+      "typeVersion": 1,
+      "position": [500, 450]
+    }
+  ],
+  "connections": {}
+}

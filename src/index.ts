@@ -361,36 +361,63 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "check_auth_status",
-        description: "Check authentication status",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-      {
-        name: "search_competitor_ads",
-        description: "Search competitor ads by keywords",
+        name: "search_ads_by_terms",
+        description: "Search ads in Facebook Ad Library by search terms",
         inputSchema: {
           type: "object",
           properties: {
-            keywords: { type: "string", description: "Keywords to search" },
-            country: { type: "string", default: "IT", description: "Country code (e.g., IT, US, GB)" },
-            limit: { type: "number", default: 10 },
+            search_terms: { type: "string", description: "Search terms (keywords)" },
+            ad_reached_countries: { type: "string", description: "Country code (e.g., IT, US, GB)" },
+            limit: { type: "number", default: 25, description: "Maximum number of results" },
+            include_creatives: { type: "boolean", description: "Include creative assets" },
+            ad_delivery_date_min: { type: "string", description: "Minimum delivery date (YYYY-MM-DD)" },
+            ad_delivery_date_max: { type: "string", description: "Maximum delivery date (YYYY-MM-DD)" },
           },
-          required: ["keywords"],
+          required: ["search_terms"],
         },
       },
       {
         name: "search_ads_by_page",
-        description: "Get ads from a Facebook page",
+        description: "Get all ads from a specific Facebook page",
         inputSchema: {
           type: "object",
           properties: {
             page_id: { type: "string", description: "Facebook page ID" },
+            ad_reached_countries: { type: "string", description: "Country code filter" },
             limit: { type: "number", default: 25 },
+            ad_delivery_date_min: { type: "string", description: "Minimum delivery date (YYYY-MM-DD)" },
+            ad_delivery_date_max: { type: "string", description: "Maximum delivery date (YYYY-MM-DD)" },
           },
           required: ["page_id"],
+        },
+      },
+      {
+        name: "analyze_competitor_ads",
+        description: "Analyze ads from multiple competitor pages",
+        inputSchema: {
+          type: "object",
+          properties: {
+            competitor_pages: { 
+              type: "array", 
+              items: { type: "string" },
+              description: "List of competitor page IDs or names" 
+            },
+            analysis_period_days: { type: "number", default: 30, description: "Analysis period in days" },
+            countries: { type: "string", description: "Country code filter" },
+            include_creative_analysis: { type: "boolean", description: "Include creative analysis" },
+          },
+          required: ["competitor_pages"],
+        },
+      },
+      {
+        name: "get_ad_creative",
+        description: "Download and display creative assets for a specific ad",
+        inputSchema: {
+          type: "object",
+          properties: {
+            ad_id: { type: "string", description: "Facebook ad ID" },
+            ad_snapshot_url: { type: "string", description: "Direct snapshot URL" },
+          },
         },
       },
     ],
@@ -443,47 +470,187 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     let result: any;
     
     switch (name) {
-      case "check_auth_status":
-        result = {
-          authenticated: !!userId,
-          has_facebook: !!fbToken,
-          user_id: userId,
-        };
-        break;
-        
-      case "search_competitor_ads":
-        // Use app access token for public Ad Library searches
-        const params: any = {
-          ad_type: "POLITICAL_AND_ISSUE_ADS", // Try with original type
+      case "search_ads_by_terms":
+        // Build params for Facebook Ad Library
+        const searchParams: any = {
+          ad_type: "ALL",
           ad_active_status: "ALL",
-          search_terms: args?.keywords || "",
-          limit: args?.limit || 10,
-          ad_reached_countries: args?.country || DEFAULT_AD_COUNTRY // Use configurable default country
+          search_terms: args?.search_terms || "",
+          limit: args?.limit || 25,
         };
-        // Use user's Facebook token for the search
-        const fbResult = await fetchAdsFromFacebook(params, fbToken);
-        result = fbResult.error ? fbResult : {
-          keywords: args?.keywords || "",
-          ads_found: fbResult.data?.length || 0,
-          ads: fbResult.data || [],
-        };
+        
+        // Add optional filters
+        if (args?.ad_reached_countries) {
+          searchParams.ad_reached_countries = args.ad_reached_countries;
+        }
+        if (args?.ad_delivery_date_min) {
+          searchParams.ad_delivery_date_min = args.ad_delivery_date_min;
+        }
+        if (args?.ad_delivery_date_max) {
+          searchParams.ad_delivery_date_max = args.ad_delivery_date_max;
+        }
+        
+        const searchResult = await fetchAdsFromFacebook(searchParams, fbToken);
+        
+        if (searchResult.error) {
+          result = searchResult;
+        } else {
+          // Format response according to requirements
+          const ads = (searchResult.data || []).map((ad: any) => ({
+            id: ad.id,
+            ad_snapshot_url: ad.ad_snapshot_url,
+            ad_creative_bodies: ad.ad_creative_bodies || [],
+            ad_creative_link_titles: ad.ad_creative_link_titles || [],
+            page_name: ad.page_name,
+            ad_delivery_start_time: ad.ad_delivery_start_time,
+            ad_delivery_stop_time: ad.ad_delivery_stop_time,
+            publisher_platforms: ad.publisher_platforms || [],
+            library_url: `https://www.facebook.com/ads/library/?id=${ad.id}`,
+            // Include additional fields if requested
+            ...(args?.include_creatives ? {
+              ad_creative_link_captions: ad.ad_creative_link_captions,
+              ad_creative_link_descriptions: ad.ad_creative_link_descriptions,
+            } : {}),
+          }));
+          
+          result = {
+            search_terms: args?.search_terms,
+            ads_found: ads.length,
+            ads: ads,
+          };
+        }
         break;
         
       case "search_ads_by_page":
-        // Use app access token for public Ad Library searches
-        const pageParams = {
-          ad_type: "POLITICAL_AND_ISSUE_ADS", // Try with original type
+        const pageParams: any = {
+          ad_type: "ALL",
           ad_active_status: "ALL",
           search_page_ids: args?.page_id || "",
           limit: args?.limit || 25,
         };
-        // Use user's Facebook token for the search
+        
+        // Add optional filters
+        if (args?.ad_reached_countries) {
+          pageParams.ad_reached_countries = args.ad_reached_countries;
+        }
+        if (args?.ad_delivery_date_min) {
+          pageParams.ad_delivery_date_min = args.ad_delivery_date_min;
+        }
+        if (args?.ad_delivery_date_max) {
+          pageParams.ad_delivery_date_max = args.ad_delivery_date_max;
+        }
+        
         const pageResult = await fetchAdsFromFacebook(pageParams, fbToken);
-        result = pageResult.error ? pageResult : {
-          page_id: args?.page_id || "",
-          ads_found: pageResult.data?.length || 0,
-          ads: pageResult.data || [],
+        
+        if (pageResult.error) {
+          result = pageResult;
+        } else {
+          // Format response according to requirements
+          const ads = (pageResult.data || []).map((ad: any) => ({
+            id: ad.id,
+            ad_snapshot_url: ad.ad_snapshot_url,
+            ad_creative_bodies: ad.ad_creative_bodies || [],
+            ad_creative_link_titles: ad.ad_creative_link_titles || [],
+            page_name: ad.page_name,
+            ad_delivery_start_time: ad.ad_delivery_start_time,
+            ad_delivery_stop_time: ad.ad_delivery_stop_time,
+            publisher_platforms: ad.publisher_platforms || [],
+            library_url: `https://www.facebook.com/ads/library/?id=${ad.id}`,
+          }));
+          
+          result = {
+            page_id: args?.page_id,
+            ads_found: ads.length,
+            ads: ads,
+          };
+        }
+        break;
+        
+      case "analyze_competitor_ads":
+        const competitors: string[] = Array.isArray(args?.competitor_pages) ? args.competitor_pages : [];
+        const periodDays: number = typeof args?.analysis_period_days === 'number' ? args.analysis_period_days : 30;
+        const countries = args?.countries;
+        
+        // Calculate date range
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - periodDays);
+        
+        const competitorResults: any[] = [];
+        
+        // Fetch ads for each competitor
+        for (const competitor of competitors) {
+          const competitorParams: any = {
+            ad_type: "ALL",
+            ad_active_status: "ALL",
+            search_page_ids: competitor,
+            limit: 50,
+            ad_delivery_date_min: startDate.toISOString().split('T')[0],
+            ad_delivery_date_max: endDate.toISOString().split('T')[0],
+          };
+          
+          if (countries) {
+            competitorParams.ad_reached_countries = countries;
+          }
+          
+          const competitorResult = await fetchAdsFromFacebook(competitorParams, fbToken);
+          
+          if (!competitorResult.error) {
+            competitorResults.push({
+              page: competitor,
+              ads_count: competitorResult.data?.length || 0,
+              ads: competitorResult.data || [],
+            });
+          }
+        }
+        
+        // Analyze results
+        result = {
+          competitors_analyzed: competitors.length,
+          analysis_period: `${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`,
+          results: competitorResults,
+          summary: {
+            total_ads: competitorResults.reduce((sum, c) => sum + c.ads_count, 0),
+            most_active: competitorResults.sort((a, b) => b.ads_count - a.ads_count)[0]?.page || null,
+          },
         };
+        break;
+        
+      case "get_ad_creative":
+        if (!args?.ad_id && !args?.ad_snapshot_url) {
+          result = { error: "Either ad_id or ad_snapshot_url is required" };
+        } else if (args?.ad_snapshot_url) {
+          // Return the snapshot URL for the user to view
+          result = {
+            snapshot_url: args.ad_snapshot_url,
+            message: "Visit the snapshot URL to view the ad creative",
+          };
+        } else {
+          // Fetch ad details to get snapshot URL
+          const adParams = {
+            ad_type: "ALL",
+            ad_active_status: "ALL",
+            search_terms: args.ad_id,
+            limit: 1,
+          };
+          
+          const adResult = await fetchAdsFromFacebook(adParams, fbToken);
+          
+          if (adResult.error) {
+            result = adResult;
+          } else if (adResult.data && adResult.data.length > 0) {
+            const ad = adResult.data[0];
+            result = {
+              ad_id: ad.id,
+              snapshot_url: ad.ad_snapshot_url,
+              creative_bodies: ad.ad_creative_bodies || [],
+              creative_link_titles: ad.ad_creative_link_titles || [],
+              message: "Visit the snapshot URL to view the full ad creative",
+            };
+          } else {
+            result = { error: "Ad not found" };
+          }
+        }
         break;
         
       default:
