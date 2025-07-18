@@ -124,6 +124,16 @@
             border-bottom: none;
         }
         
+        .plan-description {
+            font-size: 1rem;
+            color: #e0e0e0;
+            padding: 0.5rem 0;
+        }
+        
+        .plan-description strong {
+            color: #0066ff;
+        }
+        
         .plan-actions {
             display: flex;
             gap: 1rem;
@@ -341,27 +351,33 @@
             const planContent = document.getElementById('planContent');
             const searchPlan = document.getElementById('searchPlan');
             
-            // Format plan display
             let planHTML = '';
             
-            if (plan.keywords) {
-                planHTML += `<div class="plan-item"><strong>Parole chiave:</strong> ${plan.keywords.join(', ')}</div>`;
-            }
-            
-            if (plan.pages) {
-                planHTML += `<div class="plan-item"><strong>Pagine da analizzare:</strong> ${plan.pages.join(', ')}</div>`;
-            }
-            
-            if (plan.date_range) {
-                planHTML += `<div class="plan-item"><strong>Periodo:</strong> ${plan.date_range.from} - ${plan.date_range.to}</div>`;
-            }
-            
-            if (plan.countries) {
-                planHTML += `<div class="plan-item"><strong>Paesi:</strong> ${plan.countries.join(', ')}</div>`;
-            }
-            
-            if (plan.analysis_type) {
-                planHTML += `<div class="plan-item"><strong>Tipo di analisi:</strong> ${plan.analysis_type}</div>`;
+            // Se il piano ha una descrizione testuale, mostrala
+            if (plan.description) {
+                planHTML = `<div class="plan-description" style="white-space: pre-line; line-height: 1.6;">${plan.description}</div>`;
+            } 
+            // Altrimenti usa il formato tecnico (fallback)
+            else {
+                if (plan.keywords) {
+                    planHTML += `<div class="plan-item"><strong>Parole chiave:</strong> ${plan.keywords.join(', ')}</div>`;
+                }
+                
+                if (plan.pages) {
+                    planHTML += `<div class="plan-item"><strong>Pagine da analizzare:</strong> ${plan.pages.join(', ')}</div>`;
+                }
+                
+                if (plan.date_range) {
+                    planHTML += `<div class="plan-item"><strong>Periodo:</strong> ${plan.date_range.from} - ${plan.date_range.to}</div>`;
+                }
+                
+                if (plan.countries) {
+                    planHTML += `<div class="plan-item"><strong>Paesi:</strong> ${plan.countries.join(', ')}</div>`;
+                }
+                
+                if (plan.analysis_type) {
+                    planHTML += `<div class="plan-item"><strong>Tipo di analisi:</strong> ${plan.analysis_type}</div>`;
+                }
             }
             
             planContent.innerHTML = planHTML || '<p>Piano di ricerca in elaborazione...</p>';
