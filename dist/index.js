@@ -1306,25 +1306,34 @@ app.post("/login", express_1.default.urlencoded({ extended: true }), async (req,
     let isAdmin = false;
     if (supabase && userId) {
         try {
-            const { data: userData } = await supabase
+            console.log("[LOGIN] Fetching admin status for user:", userId);
+            const { data: userData, error } = await supabase
                 .from("users")
-                .select("is_admin")
+                .select("is_admin, email")
                 .eq("user_id", userId)
                 .single();
+            console.log("[LOGIN] User data from DB:", userData);
+            console.log("[LOGIN] Query error:", error);
             isAdmin = userData?.is_admin || false;
+            console.log("[LOGIN] Is admin:", isAdmin);
         }
         catch (error) {
             console.log("Error fetching admin status:", error);
         }
     }
+    else {
+        console.log("[LOGIN] No supabase or userId - demo mode");
+    }
     // Create session
     const sessionId = crypto_1.default.randomBytes(32).toString('hex');
-    sessions.set(sessionId, {
+    const sessionData = {
         user_id: userId,
         email: email,
         is_admin: isAdmin,
         created_at: Date.now()
-    });
+    };
+    console.log("[LOGIN] Creating session with data:", sessionData);
+    sessions.set(sessionId, sessionData);
     // Set session cookie
     res.cookie('session_id', sessionId, {
         httpOnly: true,
@@ -2283,6 +2292,33 @@ app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
     console.log("✅ Completing OAuth flow, redirecting to Claude.ai");
     res.redirect(redirectUrl.toString());
 });
+// Force refresh session from database
+app.get("/refresh-session", async (req, res) => {
+    const sessionId = req.cookies?.session_id;
+    if (!sessionId || !sessions.has(sessionId)) {
+        return res.redirect('/login');
+    }
+    const session = sessions.get(sessionId);
+    if (supabase && session.user_id) {
+        try {
+            const { data: userData, error } = await supabase
+                .from("users")
+                .select("is_admin, email")
+                .eq("user_id", session.user_id)
+                .single();
+            if (userData) {
+                // Update session with fresh data
+                session.is_admin = userData.is_admin || false;
+                sessions.set(sessionId, session);
+                console.log("[REFRESH] Updated session for", session.email, "is_admin:", session.is_admin);
+            }
+        }
+        catch (error) {
+            console.error("[REFRESH] Error:", error);
+        }
+    }
+    res.redirect(req.query.next || '/dashboard');
+});
 // Debug route to check session
 app.get("/debug/session", (req, res) => {
     const sessionId = req.cookies?.session_id;
@@ -2299,8 +2335,11 @@ app.get("/debug/session", (req, res) => {
     }
     res.json({
         session: session,
-        isAdmin: session.email === 'info@growthers.io',
-        adminEmail: process.env.ADMIN_EMAIL || 'info@growthers.io'
+        sessionId: sessionId,
+        cookieFound: true,
+        hasIsAdminField: 'is_admin' in session,
+        isAdminValue: session.is_admin,
+        allSessionIds: Array.from(sessions.keys())
     });
 });
 // Admin webhook configuration route
