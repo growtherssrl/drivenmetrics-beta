@@ -2835,6 +2835,14 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
   const searchId = crypto.randomBytes(16).toString('hex');
   
   try {
+    console.log("[CREATE-SEARCH] Calling n8n webhook:", n8n_webhook);
+    console.log("[CREATE-SEARCH] Request data:", {
+      action: 'create_plan',
+      search_id: searchId,
+      query: query,
+      user_id: user_id
+    });
+    
     // Forward to n8n webhook for plan creation
     const n8nResponse = await axios.post(n8n_webhook, {
       action: 'create_plan',
@@ -2842,7 +2850,20 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
       query: query,
       user_id: user_id,
       timestamp: new Date().toISOString()
+    }, {
+      timeout: 30000, // 30 secondi timeout
+      headers: {
+        'Content-Type': 'application/json'
+      }
     });
+    
+    console.log("[CREATE-SEARCH] n8n response status:", n8nResponse.status);
+    console.log("[CREATE-SEARCH] n8n response data:", n8nResponse.data);
+    
+    // Extract plan from n8n response
+    // n8n might return the plan directly or nested under 'plan'
+    const planData = n8nResponse.data.plan || n8nResponse.data;
+    console.log("[CREATE-SEARCH] Extracted plan data:", planData);
     
     // Store search info
     activeSearches.set(searchId, {
@@ -2850,7 +2871,7 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
       query: query,
       user_id: user_id,
       status: 'planning',
-      plan: n8nResponse.data.plan || {},
+      plan: planData,
       created_at: new Date().toISOString()
     });
     
@@ -2864,7 +2885,7 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
             user_id: user_id,
             query: query,
             status: 'planning',
-            plan: n8nResponse.data.plan,
+            plan: planData,
             created_at: new Date().toISOString()
           });
       } catch (dbError) {
@@ -2874,7 +2895,7 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
     
     res.json({
       search_id: searchId,
-      plan: n8nResponse.data.plan,
+      plan: planData,
       status: 'planning'
     });
     
