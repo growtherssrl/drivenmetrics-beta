@@ -2570,20 +2570,34 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
             }
         });
         console.log("[CREATE-SEARCH] n8n response status:", n8nResponse.status);
-        console.log("[CREATE-SEARCH] n8n response data:", n8nResponse.data);
+        console.log("[CREATE-SEARCH] n8n response data:", JSON.stringify(n8nResponse.data));
         // Extract plan from n8n response
         // n8n returns an array with the plan object
         let planData = {};
+        // Check if response has data
+        if (!n8nResponse.data || (typeof n8nResponse.data === 'string' && n8nResponse.data.trim() === '')) {
+            console.error("[CREATE-SEARCH] Empty response from n8n");
+            throw new Error("n8n webhook returned empty response. Please check n8n workflow configuration.");
+        }
         if (Array.isArray(n8nResponse.data) && n8nResponse.data.length > 0) {
             planData = n8nResponse.data[0].plan || n8nResponse.data[0];
         }
         else if (n8nResponse.data.plan) {
             planData = n8nResponse.data.plan;
         }
-        else {
+        else if (typeof n8nResponse.data === 'object') {
             planData = n8nResponse.data;
         }
-        console.log("[CREATE-SEARCH] Extracted plan data:", planData);
+        else {
+            console.error("[CREATE-SEARCH] Unexpected response format:", n8nResponse.data);
+            throw new Error("Invalid response format from n8n webhook");
+        }
+        // Validate plan data
+        if (!planData || Object.keys(planData).length === 0) {
+            console.error("[CREATE-SEARCH] Plan data is empty");
+            throw new Error("n8n webhook did not return a valid plan");
+        }
+        console.log("[CREATE-SEARCH] Extracted plan data:", JSON.stringify(planData));
         // Store search info
         activeSearches.set(searchId, {
             id: searchId,
