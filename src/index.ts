@@ -2861,8 +2861,15 @@ app.post("/api/deep-marketing/create-search", async (req, res) => {
     console.log("[CREATE-SEARCH] n8n response data:", n8nResponse.data);
     
     // Extract plan from n8n response
-    // n8n might return the plan directly or nested under 'plan'
-    const planData = n8nResponse.data.plan || n8nResponse.data;
+    // n8n returns an array with the plan object
+    let planData = {};
+    if (Array.isArray(n8nResponse.data) && n8nResponse.data.length > 0) {
+      planData = n8nResponse.data[0].plan || n8nResponse.data[0];
+    } else if (n8nResponse.data.plan) {
+      planData = n8nResponse.data.plan;
+    } else {
+      planData = n8nResponse.data;
+    }
     console.log("[CREATE-SEARCH] Extracted plan data:", planData);
     
     // Store search info
