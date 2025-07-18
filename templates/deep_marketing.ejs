@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Marketing Analysis - Drivenmetrics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: #999;
+        }
+        
+        .search-box {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 1rem;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 8px;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #0066ff;
+        }
+        
+        .button {
+            background: #0066ff;
+            color: #fff;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .button:hover {
+            background: #0052cc;
+        }
+        
+        .button:disabled {
+            background: #444;
+            cursor: not-allowed;
+        }
+        
+        .button.secondary {
+            background: #333;
+        }
+        
+        .button.secondary:hover {
+            background: #444;
+        }
+        
+        .search-plan {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            display: none;
+        }
+        
+        .search-plan.active {
+            display: block;
+        }
+        
+        .search-plan h3 {
+            margin-bottom: 1rem;
+        }
+        
+        .plan-content {
+            background: #0a0a0a;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid #333;
+        }
+        
+        .plan-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #333;
+        }
+        
+        .plan-item:last-child {
+            border-bottom: none;
+        }
+        
+        .plan-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .results-container {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            display: none;
+        }
+        
+        .results-container.active {
+            display: block;
+        }
+        
+        .status-message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        .status-message.info {
+            background: #0066ff20;
+            border: 1px solid #0066ff;
+            color: #66b3ff;
+        }
+        
+        .status-message.success {
+            background: #00ff4420;
+            border: 1px solid #00ff44;
+            color: #66ff99;
+        }
+        
+        .status-message.error {
+            background: #ff444420;
+            border: 1px solid #ff4444;
+            color: #ff9999;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #333;
+            border-top-color: #0066ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .results-grid {
+            display: grid;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .result-card {
+            background: #0a0a0a;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        
+        .result-card h4 {
+            margin-bottom: 0.5rem;
+            color: #0066ff;
+        }
+        
+        .result-meta {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            color: #999;
+        }
+        
+        .footer-info {
+            text-align: center;
+            margin-top: 3rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .footer-info .heart {
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Deep Marketing Analysis</h1>
+            <p>Analizza le campagne pubblicitarie dei tuoi competitor con l'intelligenza artificiale</p>
+        </div>
+        
+        <div class="search-box">
+            <h2>Cosa vuoi analizzare?</h2>
+            <textarea 
+                id="searchQuery" 
+                class="search-input" 
+                placeholder="Es: Recuperami le campagne sulle scarpe Nike, analizza gli annunci di Adidas nell'ultimo mese, confronta le strategie di Apple e Samsung..."
+                rows="3"
+            ></textarea>
+            <button id="analyzeBtn" class="button" onclick="createSearch()">
+                Analizza
+            </button>
+        </div>
+        
+        <div id="searchPlan" class="search-plan">
+            <h3>📋 Piano di Ricerca</h3>
+            <div id="planContent" class="plan-content">
+                <!-- Plan details will be inserted here -->
+            </div>
+            <div class="plan-actions">
+                <button class="button" onclick="executeSearch()">
+                    Avvia Ricerca
+                </button>
+                <button class="button secondary" onclick="modifySearch()">
+                    Modifica
+                </button>
+                <button class="button secondary" onclick="cancelSearch()">
+                    Annulla
+                </button>
+            </div>
+        </div>
+        
+        <div id="statusMessage" class="status-message"></div>
+        
+        <div id="resultsContainer" class="results-container">
+            <h3>📊 Risultati Analisi</h3>
+            <div id="resultsGrid" class="results-grid">
+                <!-- Results will be inserted here -->
+            </div>
+        </div>
+        
+        <div class="footer-info">
+            Crafted with <span class="heart">❤️</span> e AI by Growthers
+        </div>
+    </div>
+    
+    <script>
+        let currentSearchId = null;
+        let n8nWebhookUrl = '<%= n8n_webhook_url || "" %>';
+        
+        // Configure n8n webhook URL (you can set this from environment or config)
+        if (!n8nWebhookUrl) {
+            n8nWebhookUrl = prompt('Inserisci l\'URL del webhook n8n:', 'https://your-n8n-instance.com/webhook/deep-marketing');
+            if (n8nWebhookUrl) {
+                localStorage.setItem('n8n_webhook_url', n8nWebhookUrl);
+            }
+        }
+        
+        // Load saved webhook URL
+        if (!n8nWebhookUrl && localStorage.getItem('n8n_webhook_url')) {
+            n8nWebhookUrl = localStorage.getItem('n8n_webhook_url');
+        }
+        
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message ${type}`;
+            statusEl.style.display = 'block';
+            
+            if (type !== 'error') {
+                setTimeout(() => {
+                    statusEl.style.display = 'none';
+                }, 5000);
+            }
+        }
+        
+        async function createSearch() {
+            const query = document.getElementById('searchQuery').value.trim();
+            if (!query) {
+                showStatus('Inserisci una richiesta di analisi', 'error');
+                return;
+            }
+            
+            if (!n8nWebhookUrl) {
+                showStatus('URL webhook n8n non configurato', 'error');
+                return;
+            }
+            
+            const analyzeBtn = document.getElementById('analyzeBtn');
+            analyzeBtn.disabled = true;
+            analyzeBtn.innerHTML = '<span class="loading"></span> Creazione piano...';
+            
+            try {
+                // Call internal API which will forward to n8n
+                const response = await fetch('/api/deep-marketing/create-search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        n8n_webhook: n8nWebhookUrl,
+                        user_id: '<%= user?.user_id || "anonymous" %>'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Errore nella creazione del piano');
+                }
+                
+                const data = await response.json();
+                currentSearchId = data.search_id;
+                
+                // Display the search plan
+                displaySearchPlan(data.plan);
+                showStatus('Piano di ricerca creato!', 'success');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus('Errore: ' + error.message, 'error');
+            } finally {
+                analyzeBtn.disabled = false;
+                analyzeBtn.innerHTML = 'Analizza';
+            }
+        }
+        
+        function displaySearchPlan(plan) {
+            const planContent = document.getElementById('planContent');
+            const searchPlan = document.getElementById('searchPlan');
+            
+            // Format plan display
+            let planHTML = '';
+            
+            if (plan.keywords) {
+                planHTML += `<div class="plan-item"><strong>Parole chiave:</strong> ${plan.keywords.join(', ')}</div>`;
+            }
+            
+            if (plan.pages) {
+                planHTML += `<div class="plan-item"><strong>Pagine da analizzare:</strong> ${plan.pages.join(', ')}</div>`;
+            }
+            
+            if (plan.date_range) {
+                planHTML += `<div class="plan-item"><strong>Periodo:</strong> ${plan.date_range.from} - ${plan.date_range.to}</div>`;
+            }
+            
+            if (plan.countries) {
+                planHTML += `<div class="plan-item"><strong>Paesi:</strong> ${plan.countries.join(', ')}</div>`;
+            }
+            
+            if (plan.analysis_type) {
+                planHTML += `<div class="plan-item"><strong>Tipo di analisi:</strong> ${plan.analysis_type}</div>`;
+            }
+            
+            planContent.innerHTML = planHTML || '<p>Piano di ricerca in elaborazione...</p>';
+            searchPlan.classList.add('active');
+        }
+        
+        async function executeSearch() {
+            if (!currentSearchId) {
+                showStatus('Nessuna ricerca da eseguire', 'error');
+                return;
+            }
+            
+            showStatus('Esecuzione ricerca in corso...', 'info');
+            document.getElementById('searchPlan').style.display = 'none';
+            
+            try {
+                const response = await fetch('/api/deep-marketing/execute-search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        search_id: currentSearchId,
+                        n8n_webhook: n8nWebhookUrl
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Errore nell\'esecuzione della ricerca');
+                }
+                
+                showStatus('Ricerca avviata! I risultati arriveranno a breve...', 'success');
+                
+                // Start polling for results
+                pollForResults();
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus('Errore: ' + error.message, 'error');
+            }
+        }
+        
+        function modifySearch() {
+            // Go back to search input
+            document.getElementById('searchPlan').classList.remove('active');
+            document.getElementById('searchQuery').focus();
+        }
+        
+        function cancelSearch() {
+            currentSearchId = null;
+            document.getElementById('searchPlan').classList.remove('active');
+            document.getElementById('searchQuery').value = '';
+            showStatus('Ricerca annullata', 'info');
+        }
+        
+        async function pollForResults() {
+            if (!currentSearchId) return;
+            
+            try {
+                const response = await fetch(`/api/deep-marketing/results/${currentSearchId}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.status === 'completed') {
+                        displayResults(data.results);
+                        showStatus('Analisi completata!', 'success');
+                        currentSearchId = null;
+                    } else if (data.status === 'error') {
+                        showStatus('Errore nell\'analisi: ' + data.error, 'error');
+                        currentSearchId = null;
+                    } else {
+                        // Still processing, poll again
+                        setTimeout(pollForResults, 2000);
+                    }
+                } else if (response.status === 404) {
+                    // Results not ready yet
+                    setTimeout(pollForResults, 2000);
+                }
+            } catch (error) {
+                console.error('Polling error:', error);
+                setTimeout(pollForResults, 5000);
+            }
+        }
+        
+        function displayResults(results) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            const resultsGrid = document.getElementById('resultsGrid');
+            
+            if (!results || results.length === 0) {
+                resultsGrid.innerHTML = '<p>Nessun risultato trovato</p>';
+                resultsContainer.classList.add('active');
+                return;
+            }
+            
+            let resultsHTML = '';
+            
+            results.forEach(result => {
+                resultsHTML += `
+                    <div class="result-card">
+                        <h4>${result.page_name || 'Annuncio'}</h4>
+                        <p>${result.ad_creative_bodies ? result.ad_creative_bodies[0] : 'Nessun testo disponibile'}</p>
+                        <div class="result-meta">
+                            <span>📅 ${new Date(result.ad_delivery_start_time).toLocaleDateString('it-IT')}</span>
+                            <span>🌍 ${result.publisher_platforms ? result.publisher_platforms.join(', ') : 'N/A'}</span>
+                            <span><a href="${result.ad_snapshot_url}" target="_blank">Vedi annuncio →</a></span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            resultsGrid.innerHTML = resultsHTML;
+            resultsContainer.classList.add('active');
+        }
+        
+        // Enable Enter key to submit
+        document.getElementById('searchQuery').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                createSearch();
+            }
+        });
+    </script>
+</body>
+</html>

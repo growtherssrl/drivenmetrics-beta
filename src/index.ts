@@ -2509,6 +2509,224 @@ app.get("/api/complete-oauth/:oauth_state", async (req, res) => {
   res.redirect(redirectUrl.toString());
 });
 
+// Deep Marketing routes
+app.get("/deep-marketing", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.redirect('/login?next=/deep-marketing');
+  }
+  
+  const session = sessions.get(sessionId);
+  
+  try {
+    res.render('deep_marketing', {
+      user: session,
+      n8n_webhook_url: process.env.N8N_WEBHOOK_URL || ''
+    });
+  } catch (err) {
+    console.error('Deep Marketing page error:', err);
+    res.status(500).send('Error loading Deep Marketing page');
+  }
+});
+
+// Store active searches
+const activeSearches = new Map<string, any>();
+
+// Create search endpoint
+app.post("/api/deep-marketing/create-search", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const { query, n8n_webhook, user_id } = req.body;
+  
+  if (!query || !n8n_webhook) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+  
+  const searchId = crypto.randomBytes(16).toString('hex');
+  
+  try {
+    // Forward to n8n webhook for plan creation
+    const n8nResponse = await axios.post(n8n_webhook, {
+      action: 'create_plan',
+      search_id: searchId,
+      query: query,
+      user_id: user_id,
+      timestamp: new Date().toISOString()
+    });
+    
+    // Store search info
+    activeSearches.set(searchId, {
+      id: searchId,
+      query: query,
+      user_id: user_id,
+      status: 'planning',
+      plan: n8nResponse.data.plan || {},
+      created_at: new Date().toISOString()
+    });
+    
+    // If using Supabase, store in database
+    if (supabase && user_id !== 'anonymous') {
+      try {
+        await supabase
+          .from("deep_marketing_searches")
+          .insert({
+            id: searchId,
+            user_id: user_id,
+            query: query,
+            status: 'planning',
+            plan: n8nResponse.data.plan,
+            created_at: new Date().toISOString()
+          });
+      } catch (dbError) {
+        console.error("Error saving search to database:", dbError);
+      }
+    }
+    
+    res.json({
+      search_id: searchId,
+      plan: n8nResponse.data.plan,
+      status: 'planning'
+    });
+    
+  } catch (error) {
+    console.error("Error creating search plan:", error);
+    res.status(500).json({ error: "Failed to create search plan" });
+  }
+});
+
+// Execute search endpoint
+app.post("/api/deep-marketing/execute-search", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const { search_id, n8n_webhook } = req.body;
+  
+  if (!search_id || !n8n_webhook) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+  
+  const search = activeSearches.get(search_id);
+  if (!search) {
+    return res.status(404).json({ error: "Search not found" });
+  }
+  
+  try {
+    // Update search status
+    search.status = 'executing';
+    activeSearches.set(search_id, search);
+    
+    // Forward to n8n webhook for execution
+    axios.post(n8n_webhook, {
+      action: 'execute_search',
+      search_id: search_id,
+      plan: search.plan,
+      user_id: search.user_id,
+      mcp_endpoint: `${baseUrl}/mcp-api/sse`,
+      callback_url: `${baseUrl}/api/deep-marketing/receive-results`,
+      timestamp: new Date().toISOString()
+    }).catch(error => {
+      console.error("Error executing search in n8n:", error);
+      // Update search status on error
+      search.status = 'error';
+      search.error = error.message;
+      activeSearches.set(search_id, search);
+    });
+    
+    res.json({
+      search_id: search_id,
+      status: 'executing',
+      message: 'Search execution started'
+    });
+    
+  } catch (error) {
+    console.error("Error executing search:", error);
+    res.status(500).json({ error: "Failed to execute search" });
+  }
+});
+
+// Receive results from n8n
+app.post("/api/deep-marketing/receive-results", async (req, res) => {
+  const { search_id, results, status, error } = req.body;
+  
+  if (!search_id) {
+    return res.status(400).json({ error: "Missing search_id" });
+  }
+  
+  const search = activeSearches.get(search_id);
+  if (!search) {
+    return res.status(404).json({ error: "Search not found" });
+  }
+  
+  // Update search with results
+  search.status = status || 'completed';
+  search.results = results;
+  search.error = error;
+  search.completed_at = new Date().toISOString();
+  activeSearches.set(search_id, search);
+  
+  // Save to database if available
+  if (supabase && search.user_id !== 'anonymous') {
+    try {
+      await supabase
+        .from("deep_marketing_searches")
+        .update({
+          status: search.status,
+          results: results,
+          error: error,
+          completed_at: search.completed_at
+        })
+        .eq("id", search_id);
+    } catch (dbError) {
+      console.error("Error updating search in database:", dbError);
+    }
+  }
+  
+  res.json({ 
+    success: true, 
+    message: "Results received",
+    search_id: search_id 
+  });
+});
+
+// Get search results
+app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.status(401).json({ error: "Not authenticated" });
+  }
+  
+  const { searchId } = req.params;
+  const search = activeSearches.get(searchId);
+  
+  if (!search) {
+    // Try to load from database
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("deep_marketing_searches")
+          .select("*")
+          .eq("id", searchId)
+          .single();
+        
+        if (data) {
+          return res.json(data);
+        }
+      } catch (dbError) {
+        console.error("Error loading search from database:", dbError);
+      }
+    }
+    
+    return res.status(404).json({ error: "Search not found" });
+  }
+  
+  res.json(search);
+});
+
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err);
