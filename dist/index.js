@@ -194,6 +194,7 @@ const activeConnectionsByUser = new Map();
 const activeConnectionsByIP = new Map();
 const MAX_CONNECTIONS_PER_USER = 10; // Increased from 3
 const MAX_CONNECTIONS_PER_IP = 30; // Increased from 10
+const MAX_ANONYMOUS_CONNECTIONS = 5; // Limit anonymous connections
 // Database helpers
 async function getUserByToken(token) {
     if (!token) {
@@ -885,6 +886,12 @@ setInterval(() => {
 // SSE endpoint for n8n and other SSE clients - MUST BE BEFORE the general /mcp-api handler
 app.get("/mcp-api/sse", async (req, res) => {
     console.log("[SSE] New SSE connection request");
+    console.log("[SSE] Headers:", {
+        'user-agent': req.headers['user-agent'],
+        'authorization': req.headers.authorization ? 'Bearer ***' : 'None',
+        'origin': req.headers.origin || 'None',
+        'referer': req.headers.referer || 'None'
+    });
     // Get client IP for rate limiting
     const clientIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
     const ipAddress = Array.isArray(clientIP) ? clientIP[0] : clientIP.split(',')[0].trim();
@@ -893,14 +900,19 @@ app.get("/mcp-api/sse", async (req, res) => {
     let userId = null;
     if (authHeader && authHeader.startsWith("Bearer ")) {
         const token = authHeader.slice(7);
+        console.log("[SSE] Bearer token provided:", token.substring(0, 10) + "...");
         userId = await getUserByToken(token);
         if (!userId) {
             console.log("[SSE] Invalid token - allowing anonymous connection");
             userId = null; // Allow connection but mark as anonymous
         }
+        else {
+            console.log("[SSE] Valid token - user authenticated:", userId);
+        }
     }
     else {
         console.log("[SSE] No authorization header - allowing anonymous connection");
+        console.log("[SSE] Full headers:", JSON.stringify(req.headers, null, 2));
         userId = null; // Allow connection but mark as anonymous
     }
     // Rate limiting check
@@ -956,6 +968,24 @@ app.get("/mcp-api/sse", async (req, res) => {
             return;
         }
     }
+    else {
+        // Check limit for anonymous connections
+        const anonymousConnections = activeConnectionsByUser.get('anonymous') || new Set();
+        console.log(`[SSE] Anonymous connections: ${anonymousConnections.size}/${MAX_ANONYMOUS_CONNECTIONS}`);
+        if (anonymousConnections.size >= MAX_ANONYMOUS_CONNECTIONS) {
+            console.log(`[SSE] Too many anonymous connections - ${anonymousConnections.size} connections`);
+            res.status(429).json({
+                error: "Too many anonymous connections",
+                message: "Please authenticate with a valid Bearer token",
+                details: {
+                    active: anonymousConnections.size,
+                    limit: MAX_ANONYMOUS_CONNECTIONS,
+                    hint: "Add 'Authorization: Bearer <your-token>' header"
+                }
+            });
+            return;
+        }
+    }
     // Check active connections limit per IP
     const ipConnections = activeConnectionsByIP.get(ipAddress) || new Set();
     console.log(`[SSE] IP ${ipAddress} has ${ipConnections.size}/${MAX_CONNECTIONS_PER_IP} active connections`);
@@ -989,6 +1019,12 @@ app.get("/mcp-api/sse", async (req, res) => {
             const userConnections = activeConnectionsByUser.get(userId) || new Set();
             userConnections.add(sessionId);
             activeConnectionsByUser.set(userId, userConnections);
+        }
+        else {
+            // Track anonymous connections
+            const anonymousConnections = activeConnectionsByUser.get('anonymous') || new Set();
+            anonymousConnections.add(sessionId);
+            activeConnectionsByUser.set('anonymous', anonymousConnections);
         }
         const ipConnections = activeConnectionsByIP.get(ipAddress) || new Set();
         ipConnections.add(sessionId);
@@ -1034,12 +1070,13 @@ app.get("/mcp-api/sse", async (req, res) => {
             // Get auth info before deleting
             const auth = authContext.get(transportSessionId);
             // Clean up connection tracking
-            if (auth?.userId && auth.userId !== 'anonymous') {
-                const userConnections = activeConnectionsByUser.get(auth.userId);
+            if (auth?.userId) {
+                const trackingKey = auth.userId === 'anonymous' ? 'anonymous' : auth.userId;
+                const userConnections = activeConnectionsByUser.get(trackingKey);
                 if (userConnections) {
                     userConnections.delete(transportSessionId);
                     if (userConnections.size === 0) {
-                        activeConnectionsByUser.delete(auth.userId);
+                        activeConnectionsByUser.delete(trackingKey);
                     }
                 }
             }
