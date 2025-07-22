@@ -2418,7 +2418,7 @@ app.post("/api/generate-token", async (req, res) => {
   // Save token to database
   if (supabase) {
     try {
-      // First, deactivate any existing tokens for this user
+      // First, try to deactivate any existing tokens for this user
       const { error: deactivateError } = await supabase
         .from("api_tokens")
         .update({ is_active: false })
@@ -2426,18 +2426,37 @@ app.post("/api/generate-token", async (req, res) => {
       
       if (deactivateError) {
         console.error("[GENERATE-TOKEN] Error deactivating old tokens:", deactivateError);
+        // If is_active field doesn't exist, try deleting old tokens instead
+        if (deactivateError.message?.includes('column') || deactivateError.code === '42703') {
+          console.log("[GENERATE-TOKEN] is_active field not found, trying to delete old tokens");
+          const { error: deleteError } = await supabase
+            .from("api_tokens")
+            .delete()
+            .eq("user_id", userId);
+          
+          if (deleteError) {
+            console.error("[GENERATE-TOKEN] Error deleting old tokens:", deleteError);
+          }
+        }
+      }
+      
+      // Prepare token data
+      const tokenData: any = {
+        token: apiToken,
+        user_id: userId,
+        scopes: ["mcp"],
+        created_at: new Date().toISOString()
+      };
+      
+      // Only add is_active if we didn't get an error about the column
+      if (!deactivateError || (!deactivateError.message?.includes('column') && deactivateError.code !== '42703')) {
+        tokenData.is_active = true;
       }
       
       // Insert the new token
       const { data, error } = await supabase
         .from("api_tokens")
-        .insert({
-          token: apiToken,
-          user_id: userId,
-          scopes: ["mcp"],
-          is_active: true,
-          created_at: new Date().toISOString()
-        })
+        .insert(tokenData)
         .select()
         .single();
       
