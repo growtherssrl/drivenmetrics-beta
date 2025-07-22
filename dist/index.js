@@ -2175,9 +2175,14 @@ app.get("/logout", (req, res) => {
 });
 // Generate API token endpoint
 app.post("/api/generate-token", async (req, res) => {
+    console.log("[GENERATE-TOKEN] Request received");
+    console.log("[GENERATE-TOKEN] Headers:", req.headers);
+    console.log("[GENERATE-TOKEN] Cookies:", req.cookies);
     const sessionId = req.cookies?.session_id;
+    console.log("[GENERATE-TOKEN] Session ID from cookie:", sessionId);
+    console.log("[GENERATE-TOKEN] Active sessions:", Array.from(sessions.keys()));
     if (!sessionId || !sessions.has(sessionId)) {
-        console.log("[GENERATE-TOKEN] No valid session found");
+        console.log("[GENERATE-TOKEN] No valid session found - sessionId:", sessionId, "has session:", sessionId ? sessions.has(sessionId) : false);
         return res.status(401).json({ error: "Not authenticated" });
     }
     const session = sessions.get(sessionId);
