@@ -254,6 +254,8 @@ async function getUserByToken(token: string): Promise<string | null> {
       const now = new Date();
       if (expiryDate < now) {
         console.log("[DB] Token expired:", expiryDate.toISOString());
+        // Store expiry info for better error messages
+        (global as any).lastTokenError = 'expired';
         return null;
       }
     }
@@ -843,6 +845,75 @@ app.get("/debug/token/:token", async (req, res) => {
   }
 });
 
+// User API key regeneration endpoint
+app.get("/user/api-key/regenerate", async (req, res) => {
+  // First check if user is authenticated via session
+  const sessionId = req.cookies?.session_id;
+  
+  if (!sessionId || !sessions.has(sessionId)) {
+    // Redirect to login if not authenticated
+    return res.redirect("/login?error=not_authenticated");
+  }
+  
+  const session = sessions.get(sessionId);
+  const userId = session.user_id;
+  
+  if (!userId) {
+    return res.redirect("/login?error=invalid_session");
+  }
+  
+  try {
+    // Generate new token
+    const newToken = `dmgt_${crypto.randomBytes(32).toString('hex')}`;
+    
+    // Deactivate old tokens
+    const { error: deactivateError } = await supabase
+      .from("api_tokens")
+      .update({ is_active: false })
+      .eq("user_id", userId)
+      .eq("is_active", true);
+    
+    if (deactivateError) {
+      console.error("[REGENERATE] Error deactivating old tokens:", deactivateError);
+    }
+    
+    // Insert new token
+    const tokenData = {
+      token: newToken,
+      user_id: userId,
+      token_type: 'oauth',
+      scopes: ["mcp", "facebook_ads"],
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      is_active: true,
+      metadata: {}
+    };
+    
+    const { data, error } = await supabase
+      .from("api_tokens")
+      .insert(tokenData)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error("[REGENERATE] Error creating new token:", error);
+      return res.redirect("/user/dashboard?error=token_generation_failed");
+    }
+    
+    console.log("✅ API token regenerated successfully for user:", userId);
+    
+    // Store new token in session for display
+    session.new_api_token = newToken;
+    
+    // Redirect back to dashboard with success
+    return res.redirect("/user/dashboard?success=token_regenerated");
+    
+  } catch (error) {
+    console.error("[REGENERATE] Unexpected error:", error);
+    return res.redirect("/user/dashboard?error=unexpected_error");
+  }
+});
+
 // Test OAuth flow endpoint
 app.get("/test-oauth", (req, res) => {
   res.send(`
@@ -1082,6 +1153,16 @@ app.get("/mcp-api/sse", async (req, res) => {
     userId = await getUserByToken(token);
     
     if (!userId) {
+      const tokenError = (global as any).lastTokenError;
+      if (tokenError === 'expired') {
+        console.log("[SSE] Token expired - returning error");
+        res.writeHead(401, {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache'
+        });
+        res.end(JSON.stringify({ error: "Token expired. Please regenerate your API token from the dashboard." }));
+        return;
+      }
       console.log("[SSE] Invalid token - allowing anonymous connection");
       userId = null; // Allow connection but mark as anonymous
     } else {

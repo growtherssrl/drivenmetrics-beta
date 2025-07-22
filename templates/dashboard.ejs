@@ -454,20 +454,8 @@
         
         function regenerateToken() {
             if (confirm('Are you sure you want to regenerate your API token? The old token will stop working.')) {
-                // First check session status
-                fetch('/debug/session', {
-                    credentials: 'same-origin'
-                })
-                .then(r => r.json())
-                .then(data => {
-                    console.log('[DEBUG] Session status:', data);
-                    // Now try to generate token
-                    connectClaude();
-                })
-                .catch(err => {
-                    console.error('[DEBUG] Session check failed:', err);
-                    connectClaude();
-                });
+                // Redirect to regenerate endpoint
+                window.location.href = '/user/api-key/regenerate';
             }
         }
         
