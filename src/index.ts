@@ -56,7 +56,7 @@ const FB_APP_SECRET = process.env.FB_APP_SECRET || "";
 const FB_GRAPH_VERSION = "v21.0";
 const DEFAULT_AD_COUNTRY = process.env.DEFAULT_AD_COUNTRY || "IT"; // Default country for ad searches
 
-// Initialize Supabase with service role key
+// Initialize Supabase with service role key and proper headers for PostgREST
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     autoRefreshToken: false,
@@ -67,7 +67,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   },
   global: {
     headers: {
-      'apikey': SUPABASE_KEY
+      'apikey': SUPABASE_KEY,
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
     }
   }
 });
@@ -226,6 +229,9 @@ async function getUserByToken(token: string): Promise<string | null> {
   
   try {
     console.log("[DB] Looking up token in database:", token.substring(0, 10) + "...");
+    console.log("[DB] Full token for debug:", token);
+    console.log("[DB] Token length:", token.length);
+    
     const { data, error } = await supabase
       .from("api_tokens")
       .select("user_id, expires_at, is_active")
@@ -234,8 +240,19 @@ async function getUserByToken(token: string): Promise<string | null> {
     
     if (error) {
       // Log più dettagliato per capire meglio l'errore
+      console.error("[DB] Database error details:", {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        status: error.status
+      });
+      
       if (error.code === 'PGRST116') {
         console.log(`[DB] Token not found in DB: ${token.substring(0, 20)}...`);
+      } else if (error.status === 406) {
+        console.error("[DB] ERROR 406 - Not Acceptable: Headers issue detected!");
+        console.error("[DB] This usually means missing Accept: application/json header");
       } else {
         console.error("[DB] Database error:", error);
       }
@@ -277,9 +294,14 @@ async function getUserByToken(token: string): Promise<string | null> {
 }
 
 async function getFacebookToken(userId: string): Promise<string | null> {
-  if (!supabase || !userId) return null;
+  if (!supabase || !userId) {
+    console.log("[FB] No supabase or userId provided");
+    return null;
+  }
   
   try {
+    console.log("[FB] Looking up Facebook token for user:", userId);
+    
     const { data, error } = await supabase
       .from("facebook_tokens")
       .select("access_token")
@@ -288,13 +310,19 @@ async function getFacebookToken(userId: string): Promise<string | null> {
       .maybeSingle(); // Use maybeSingle() instead of single() to handle no rows gracefully
     
     if (error) {
-      console.error("Error getting FB token:", error);
+      console.error("[FB] Error getting FB token:", error);
       return null;
     }
     
-    return data?.access_token || null;
+    if (data?.access_token) {
+      console.log("[FB] Facebook token found for user:", userId);
+      return data.access_token;
+    } else {
+      console.log("[FB] No Facebook token found for user:", userId);
+      return null;
+    }
   } catch (error) {
-    console.error("Exception getting FB token:", error);
+    console.error("[FB] Exception getting FB token:", error);
     return null;
   }
 }
