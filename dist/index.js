@@ -2173,9 +2173,21 @@ app.get("/logout", (req, res) => {
     }
     res.redirect('/');
 });
+// Generate API token endpoint with CORS
+app.options("/api/generate-token", (req, res) => {
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.status(200).end();
+});
 // Generate API token endpoint
 app.post("/api/generate-token", async (req, res) => {
+    // Set CORS headers
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Credentials", "true");
     console.log("[GENERATE-TOKEN] Request received");
+    console.log("[GENERATE-TOKEN] Origin:", req.headers.origin);
     console.log("[GENERATE-TOKEN] Headers:", req.headers);
     console.log("[GENERATE-TOKEN] Cookies:", req.cookies);
     const sessionId = req.cookies?.session_id;
@@ -2573,6 +2585,9 @@ app.get("/refresh-session", async (req, res) => {
 });
 // Debug route to check session
 app.get("/debug/session", (req, res) => {
+    // Set CORS headers
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Credentials", "true");
     const sessionId = req.cookies?.session_id;
     if (!sessionId) {
         return res.json({ error: "No session cookie found" });
