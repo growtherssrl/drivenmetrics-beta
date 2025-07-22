@@ -283,6 +283,13 @@ async function getAppAccessToken(): Promise<string | null> {
 
 // Facebook API helper
 async function fetchAdsFromFacebook(params: any, fbToken: string | null): Promise<any> {
+  const fetchStartTime = Date.now();
+  console.log(`[FB_API] Starting Facebook API request with params:`, { 
+    search_terms: params.search_terms,
+    limit: params.limit,
+    countries: params.ad_reached_countries 
+  });
+  
   try {
     // For public Ad Library, we can use app access token
     let accessToken = fbToken;
@@ -302,12 +309,22 @@ async function fetchAdsFromFacebook(params: any, fbToken: string | null): Promis
       params: {
         ...params,
         access_token: accessToken,
-        fields: 'id,ad_creation_time,ad_creative_bodies,ad_creative_link_captions,ad_creative_link_descriptions,ad_creative_link_titles,ad_delivery_start_time,ad_delivery_stop_time,ad_snapshot_url,age_country_gender_reach_breakdown,beneficiary_payers,br_total_reach,currency,demographic_distribution,estimated_audience_size,eu_total_reach,impressions,languages,page_id,page_name,publisher_platforms,spend,target_ages,target_gender,target_locations,total_reach_by_location',
+        fields: 'id,ad_creative_bodies,ad_creative_link_titles,ad_delivery_start_time,ad_delivery_stop_time,ad_snapshot_url,page_id,page_name,publisher_platforms', // Reduced fields for faster response
       },
-      timeout: 30000,
+      timeout: 55000, // Increased to 55 seconds to prevent MCP timeout
     });
+    
+    const fetchEndTime = Date.now();
+    const fetchDuration = fetchEndTime - fetchStartTime;
+    console.log(`[FB_API] Facebook API response received in ${fetchDuration}ms (${(fetchDuration/1000).toFixed(2)}s)`);
+    console.log(`[FB_API] Response data count: ${response.data?.data?.length || 0} ads`);
+    
     return response.data;
   } catch (error: any) {
+    const fetchEndTime = Date.now();
+    const fetchDuration = fetchEndTime - fetchStartTime;
+    console.log(`[FB_API] Facebook API request failed after ${fetchDuration}ms (${(fetchDuration/1000).toFixed(2)}s)`);
+    
     console.error("Facebook API error:", error.response?.data || error.message);
     
     // Check if it's a permission error
@@ -431,9 +448,11 @@ mcpServer.setRequestHandler(ListToolsRequestSchema, async () => {
 
 mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
   const { name, arguments: args } = request.params;
+  const startTime = Date.now();
   
   console.log("[TOOL] Tool called:", name, "with args:", args);
   console.log("[TOOL] Extra object:", extra ? Object.keys(extra) : "No extra");
+  console.log("[TOOL] Request started at:", new Date(startTime).toISOString());
   
   // Try multiple ways to get session ID
   let sessionId = null;
@@ -481,7 +500,7 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           ad_type: "ALL",
           ad_active_status: "ALL",
           search_terms: args?.search_terms || "",
-          limit: args?.limit || 25,
+          limit: Math.min(args?.limit || 25, 50), // Cap at 50 to reduce response time
         };
         
         // Add optional filters
@@ -531,7 +550,7 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           ad_type: "ALL",
           ad_active_status: "ALL",
           search_page_ids: args?.page_id || "",
-          limit: args?.limit || 25,
+          limit: Math.min(args?.limit || 25, 50), // Cap at 50 to reduce response time
         };
         
         // Add optional filters
@@ -662,6 +681,10 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
         result = { error: `Unknown tool: ${name}` };
     }
     
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    console.log(`[TOOL] Tool ${name} completed in ${duration}ms (${(duration/1000).toFixed(2)}s)`);
+    
     return {
       content: [
         {
@@ -671,6 +694,10 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
       ],
     };
   } catch (error) {
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    console.log(`[TOOL] Tool ${name} failed after ${duration}ms (${(duration/1000).toFixed(2)}s)`, error);
+    
     return {
       content: [
         {
@@ -3044,6 +3071,119 @@ app.post("/api/deep-marketing/execute-search", async (req, res) => {
   } catch (error) {
     console.error("Error executing search:", error);
     res.status(500).json({ error: "Failed to execute search" });
+  }
+});
+
+// Direct MCP tool execution endpoint for n8n with better timeout handling
+app.post("/api/mcp/execute-tool", async (req, res) => {
+  const { tool_name, arguments: toolArgs, auth_token } = req.body;
+  
+  console.log(`[MCP_API] Direct tool execution request: ${tool_name}`);
+  
+  // Set a longer timeout for this endpoint
+  req.setTimeout(120000); // 2 minutes
+  res.setTimeout(120000);
+  
+  try {
+    // Validate auth token
+    if (!auth_token) {
+      return res.status(401).json({ error: "Missing auth token" });
+    }
+    
+    // Get user from token
+    const { data: tokenData, error: tokenError } = await supabase
+      .from("api_tokens")
+      .select("user_id")
+      .eq("token", auth_token)
+      .single();
+    
+    if (tokenError || !tokenData) {
+      return res.status(401).json({ error: "Invalid auth token" });
+    }
+    
+    // Get Facebook token for user
+    const { data: fbTokenData } = await supabase
+      .from("facebook_tokens")
+      .select("access_token")
+      .eq("user_id", tokenData.user_id)
+      .eq("service", "competition")
+      .single();
+    
+    const fbToken = fbTokenData?.access_token || null;
+    
+    // Execute the tool directly
+    const startTime = Date.now();
+    let result: any = {};
+    
+    switch (tool_name) {
+      case "search_ads_by_terms":
+        const searchParams: any = {
+          ad_type: "ALL",
+          ad_active_status: "ALL",
+          search_terms: toolArgs?.search_terms || "",
+          limit: Math.min(toolArgs?.limit || 25, 50),
+        };
+        
+        if (toolArgs?.ad_reached_countries) {
+          searchParams.ad_reached_countries = toolArgs.ad_reached_countries;
+        }
+        if (toolArgs?.ad_delivery_date_min) {
+          searchParams.ad_delivery_date_min = toolArgs.ad_delivery_date_min;
+        }
+        if (toolArgs?.ad_delivery_date_max) {
+          searchParams.ad_delivery_date_max = toolArgs.ad_delivery_date_max;
+        }
+        
+        const searchResult = await fetchAdsFromFacebook(searchParams, fbToken);
+        
+        if (searchResult.error) {
+          result = searchResult;
+        } else {
+          const ads = (searchResult.data || []).map((ad: any) => ({
+            id: ad.id,
+            ad_snapshot_url: ad.ad_snapshot_url,
+            ad_creative_bodies: ad.ad_creative_bodies || [],
+            ad_creative_link_titles: ad.ad_creative_link_titles || [],
+            page_name: ad.page_name,
+            ad_delivery_start_time: ad.ad_delivery_start_time,
+            ad_delivery_stop_time: ad.ad_delivery_stop_time,
+            publisher_platforms: ad.publisher_platforms || [],
+            library_url: `https://www.facebook.com/ads/library/?id=${ad.id}`,
+            ...(toolArgs?.include_creatives ? {
+              ad_creative_link_captions: ad.ad_creative_link_captions,
+              ad_creative_link_descriptions: ad.ad_creative_link_descriptions,
+            } : {}),
+          }));
+          
+          result = {
+            search_terms: toolArgs?.search_terms,
+            ads_found: ads.length,
+            ads: ads,
+          };
+        }
+        break;
+        
+      default:
+        result = { error: `Unknown tool: ${tool_name}` };
+    }
+    
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    console.log(`[MCP_API] Tool ${tool_name} completed in ${duration}ms`);
+    
+    res.json({
+      success: true,
+      tool: tool_name,
+      result: result,
+      execution_time_ms: duration
+    });
+    
+  } catch (error) {
+    console.error("[MCP_API] Tool execution error:", error);
+    res.status(500).json({ 
+      error: error instanceof Error ? error.message : "Tool execution failed",
+      tool: tool_name 
+    });
   }
 });
 
