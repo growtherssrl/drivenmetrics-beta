@@ -228,17 +228,44 @@ async function getUserByToken(token: string): Promise<string | null> {
     console.log("[DB] Looking up token in database:", token.substring(0, 10) + "...");
     const { data, error } = await supabase
       .from("api_tokens")
-      .select("user_id")
+      .select("user_id, expires_at, is_active")
       .eq("token", token)
       .single();
     
     if (error) {
-      console.error("[DB] Database error:", error);
+      // Log più dettagliato per capire meglio l'errore
+      if (error.code === 'PGRST116') {
+        console.log(`[DB] Token not found in DB: ${token.substring(0, 20)}...`);
+      } else {
+        console.error("[DB] Database error:", error);
+      }
       return null;
     }
     
-    console.log("[DB] Token lookup result:", data ? "User found" : "User not found");
-    return data?.user_id || null;
+    // Check if token exists
+    if (!data) {
+      console.log("[DB] Token not found");
+      return null;
+    }
+    
+    // Check if token is expired
+    if (data.expires_at) {
+      const expiryDate = new Date(data.expires_at);
+      const now = new Date();
+      if (expiryDate < now) {
+        console.log("[DB] Token expired:", expiryDate.toISOString());
+        return null;
+      }
+    }
+    
+    // Check if token is active (if field exists)
+    if ('is_active' in data && !data.is_active) {
+      console.log("[DB] Token is inactive");
+      return null;
+    }
+    
+    console.log("[DB] Token valid for user:", data.user_id);
+    return data.user_id;
   } catch (error) {
     console.error("[DB] Error getting user:", error);
     return null;
@@ -765,6 +792,55 @@ app.get("/test-auth", async (req, res) => {
     user_id: userId,
     token: token.substring(0, 10) + "..."
   });
+});
+
+// Debug endpoint for token issues
+app.get("/debug/token/:token", async (req, res) => {
+  const { token } = req.params;
+  
+  if (!token || !token.startsWith("dmgt_")) {
+    return res.status(400).json({ error: "Invalid token format" });
+  }
+  
+  try {
+    // Get full token details
+    const { data, error } = await supabase
+      .from("api_tokens")
+      .select("*")
+      .eq("token", token)
+      .single();
+    
+    if (error) {
+      return res.json({
+        found: false,
+        error: error.message,
+        code: error.code,
+        hint: error.code === 'PGRST116' ? 'Token not found in database' : 'Database error'
+      });
+    }
+    
+    const now = new Date();
+    const expiresAt = data.expires_at ? new Date(data.expires_at) : null;
+    const isExpired = expiresAt && expiresAt < now;
+    
+    res.json({
+      found: true,
+      user_id: data.user_id,
+      token_type: data.token_type,
+      is_active: data.is_active,
+      expires_at: data.expires_at,
+      is_expired: isExpired,
+      created_at: data.created_at,
+      last_used: data.last_used,
+      scopes: data.scopes,
+      time_until_expiry: expiresAt ? `${Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))} days` : 'N/A'
+    });
+  } catch (err) {
+    res.status(500).json({
+      error: "Unexpected error",
+      details: err instanceof Error ? err.message : "Unknown error"
+    });
+  }
 });
 
 // Test OAuth flow endpoint
@@ -2522,18 +2598,18 @@ app.post("/api/generate-token", async (req, res) => {
         }
       }
       
-      // Prepare token data
+      // Prepare token data according to the database schema
       const tokenData: any = {
         token: apiToken,
         user_id: userId,
-        scopes: ["mcp"],
-        created_at: new Date().toISOString()
+        token_type: 'oauth', // Required field with default value
+        scopes: ["mcp", "facebook_ads"], // Match the default in schema
+        created_at: new Date().toISOString(),
+        // Set expiry to 30 days from now
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        is_active: true,
+        metadata: {}
       };
-      
-      // Only add is_active if we didn't get an error about the column
-      if (!deactivateError || (!deactivateError.message?.includes('column') && deactivateError.code !== '42703')) {
-        tokenData.is_active = true;
-      }
       
       // Insert the new token
       const { data, error } = await supabase
@@ -2927,6 +3003,40 @@ app.get("/refresh-session", async (req, res) => {
   }
   
   res.redirect((req.query.next as string) || '/dashboard');
+});
+
+// Debug route to check token
+app.get("/debug/token/:token", async (req, res) => {
+  // Set CORS headers
+  res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.header("Access-Control-Allow-Credentials", "true");
+  
+  const { token } = req.params;
+  console.log("[DEBUG-TOKEN] Checking token:", token?.substring(0, 20) + "...");
+  
+  if (!token) {
+    return res.json({ error: "No token provided" });
+  }
+  
+  // Direct database check
+  try {
+    const { data, error } = await supabase
+      .from("api_tokens")
+      .select("*")
+      .eq("token", token);
+    
+    console.log("[DEBUG-TOKEN] Query result:", { data, error });
+    
+    res.json({
+      token: token.substring(0, 20) + "...",
+      found: data && data.length > 0,
+      count: data?.length || 0,
+      error: error,
+      data: data
+    });
+  } catch (err) {
+    res.json({ error: "Database error", details: err });
+  }
 });
 
 // Debug route to check session
