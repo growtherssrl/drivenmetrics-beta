@@ -267,6 +267,8 @@ async function getUserByToken(token: string): Promise<string | null> {
     }
     
     console.log("[DB] Token valid for user:", data.user_id);
+    // Clear any previous error state
+    delete (global as any).lastTokenError;
     return data.user_id;
   } catch (error) {
     console.error("[DB] Error getting user:", error);
@@ -1758,48 +1760,8 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
           userId = data.user.id;
           isNewUser = true;
           
-          // Create user in our users table
-          try {
-            console.log("[REGISTRATION] Creating user in users table:", { userId, email });
-            
-            // Prima verifica se l'utente esiste già
-            const { data: existingUser } = await supabase
-              .from("users")
-              .select("user_id")
-              .eq("user_id", userId)
-              .maybeSingle();
-            
-            if (existingUser) {
-              console.log("[REGISTRATION] User already exists in users table");
-            } else {
-              const { data: userData, error: userError } = await supabase
-                .from("users")
-                .insert({
-                  user_id: userId,
-                  email: email,
-                  created_at: new Date().toISOString(),
-                  updated_at: new Date().toISOString(),
-                  is_active: true,
-                  is_admin: false
-                })
-                .select();
-              
-              if (userError) {
-                console.error("[REGISTRATION] Error creating user in users table:", userError);
-                console.error("[REGISTRATION] Error details:", {
-                  code: userError.code,
-                  message: userError.message,
-                  details: userError.details,
-                  hint: userError.hint
-                });
-                // Don't fail registration, but log the error
-              } else {
-                console.log("[REGISTRATION] User created successfully in users table:", userData);
-              }
-            }
-          } catch (err) {
-            console.error("[REGISTRATION] Exception creating user:", err);
-          }
+          // No need to manually create in public.users - database trigger handles this automatically
+          console.log("[REGISTRATION] User registered successfully, trigger will sync to public.users");
         }
       } else {
         // Login
@@ -1815,29 +1777,7 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
         }
         if (data?.user) {
           userId = data.user.id;
-          
-          // Ensure user exists in our users table
-          try {
-            console.log("[LOGIN] Ensuring user exists in users table:", { userId, email });
-            const { data: upsertData, error: upsertError } = await supabase
-              .from("users")
-              .upsert({
-                user_id: userId,
-                email: email,
-                updated_at: new Date().toISOString()
-              }, {
-                onConflict: 'user_id'
-              })
-              .select();
-            
-            if (upsertError) {
-              console.error("[LOGIN] Error upserting user:", upsertError);
-            } else {
-              console.log("[LOGIN] User upserted successfully:", upsertData);
-            }
-          } catch (err) {
-            console.error("[LOGIN] Exception upserting user:", err);
-          }
+          // No need to manually sync - database trigger handles this automatically
         }
       }
     } catch (error) {
