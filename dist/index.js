@@ -894,7 +894,8 @@ app.get("/mcp-api/sse", async (req, res) => {
                     params: {
                         meta: {
                             serverName: "drivenmetrics-mcp",
-                            serverVersion: "1.0.0"
+                            serverVersion: "1.0.0",
+                            sessionId: sessionId
                         }
                     }
                 });
@@ -953,6 +954,7 @@ app.post("/mcp-api/messages", express_1.default.json(), async (req, res, next) =
         });
     }
     console.log("[SSE] Forwarding message to transport for session:", sessionId);
+    console.log("[SSE] Available sessions:", Array.from(sseTransports.keys()));
     // Let the SSE transport handle the request
     // The transport expects handlePostMessage with body as third parameter
     try {
