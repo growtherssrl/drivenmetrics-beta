@@ -414,6 +414,8 @@
     
     <script>
         function connectClaude() {
+            console.log('[GENERATE-TOKEN] Starting token generation...');
+            
             // Generate a new API token for this user
             fetch('/api/generate-token', {
                 method: 'POST',
@@ -422,18 +424,31 @@
                 },
                 credentials: 'same-origin'
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('[GENERATE-TOKEN] Response status:', response.status);
+                if (!response.ok) {
+                    return response.json().then(err => Promise.reject(err));
+                }
+                return response.json();
+            })
             .then(data => {
+                console.log('[GENERATE-TOKEN] Response data:', data);
                 if (data.token) {
                     // Reload the page to show the new token
+                    console.log('[GENERATE-TOKEN] Token generated successfully, reloading...');
                     window.location.reload();
                 } else {
-                    alert('Error generating token. Please try again.');
+                    console.error('[GENERATE-TOKEN] No token in response:', data);
+                    alert('Error generating token: ' + (data.error || 'Unknown error'));
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                alert('Error generating token. Please try again.');
+                console.error('[GENERATE-TOKEN] Error:', error);
+                if (error.details) {
+                    alert('Error generating token: ' + error.details);
+                } else {
+                    alert('Error generating token: ' + (error.error || error.message || 'Unknown error'));
+                }
             });
         }
         

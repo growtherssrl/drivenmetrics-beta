@@ -2177,28 +2177,53 @@ app.get("/logout", (req, res) => {
 app.post("/api/generate-token", async (req, res) => {
     const sessionId = req.cookies?.session_id;
     if (!sessionId || !sessions.has(sessionId)) {
+        console.log("[GENERATE-TOKEN] No valid session found");
         return res.status(401).json({ error: "Not authenticated" });
     }
     const session = sessions.get(sessionId);
     const userId = session.user_id;
+    console.log("[GENERATE-TOKEN] Generating token for user:", userId);
     // Generate a new API token
     const apiToken = `dmgt_${crypto_1.default.randomBytes(32).toString('hex')}`;
     // Save token to database
     if (supabase) {
         try {
-            await supabase
+            // First, deactivate any existing tokens for this user
+            const { error: deactivateError } = await supabase
+                .from("api_tokens")
+                .update({ is_active: false })
+                .eq("user_id", userId);
+            if (deactivateError) {
+                console.error("[GENERATE-TOKEN] Error deactivating old tokens:", deactivateError);
+            }
+            // Insert the new token
+            const { data, error } = await supabase
                 .from("api_tokens")
                 .insert({
                 token: apiToken,
                 user_id: userId,
                 scopes: ["mcp"],
+                is_active: true,
                 created_at: new Date().toISOString()
-            });
-            console.log("✅ API token generated for user:", userId);
+            })
+                .select()
+                .single();
+            if (error) {
+                console.error("[GENERATE-TOKEN] Error saving token:", error);
+                return res.status(500).json({
+                    error: "Failed to save token",
+                    details: error.message
+                });
+            }
+            console.log("✅ API token generated successfully for user:", userId);
+            console.log("[GENERATE-TOKEN] Token data:", data);
         }
         catch (error) {
-            console.error("Error saving token:", error);
-            return res.status(500).json({ error: "Failed to save token" });
+            console.error("[GENERATE-TOKEN] Unexpected error:", error);
+            return res.status(500).json({
+                error: "Failed to save token",
+                details: error instanceof Error ? error.message : "Unknown error"
+            });
         }
     }
     res.json({
