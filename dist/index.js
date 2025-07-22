@@ -451,7 +451,7 @@ mcpServer.setRequestHandler(types_js_1.CallToolRequestSchema, async (request, ex
                     ad_type: "ALL",
                     ad_active_status: "ALL",
                     search_terms: args?.search_terms || "",
-                    limit: Math.min(Number(args?.limit) || 25, 50), // Cap at 50 to reduce response time
+                    limit: Math.min(Number(args?.limit) || 10, 20), // Reduced to 20 max to avoid token limits
                 };
                 // Add optional filters
                 if (args?.ad_reached_countries) {
@@ -489,6 +489,13 @@ mcpServer.setRequestHandler(types_js_1.CallToolRequestSchema, async (request, ex
                         search_terms: args?.search_terms,
                         ads_found: ads.length,
                         ads: ads,
+                        success: true,
+                        message: ads.length === 0
+                            ? `Nessun annuncio attivo trovato per la ricerca "${args?.search_terms}"`
+                            : `Trovati ${ads.length} annunci per "${args?.search_terms}"`,
+                        search_suggestions: ads.length === 0 && args?.search_terms && typeof args.search_terms === 'string'
+                            ? args.search_terms.split(' ').filter((word) => word.length > 3).slice(0, 3)
+                            : []
                     };
                 }
                 break;
@@ -497,7 +504,7 @@ mcpServer.setRequestHandler(types_js_1.CallToolRequestSchema, async (request, ex
                     ad_type: "ALL",
                     ad_active_status: "ALL",
                     search_page_ids: args?.page_id || "",
-                    limit: Math.min(Number(args?.limit) || 25, 50), // Cap at 50 to reduce response time
+                    limit: Math.min(Number(args?.limit) || 10, 20), // Reduced to 20 max to avoid token limits
                 };
                 // Add optional filters
                 if (args?.ad_reached_countries) {
@@ -530,6 +537,10 @@ mcpServer.setRequestHandler(types_js_1.CallToolRequestSchema, async (request, ex
                         page_id: args?.page_id,
                         ads_found: ads.length,
                         ads: ads,
+                        success: true,
+                        message: ads.length === 0
+                            ? `Nessun annuncio attivo trovato per la pagina "${args?.page_id}"`
+                            : `Trovati ${ads.length} annunci per la pagina "${args?.page_id}"`,
                     };
                 }
                 break;
