@@ -115,6 +115,115 @@
             border: 1px solid #333;
         }
         
+        .plan-editor-container {
+            display: none;
+            background: #0a0a0a;
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid #333;
+        }
+        
+        .plan-editor {
+            width: 100%;
+            background: #0a0a0a;
+            color: #fff;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: inherit;
+            font-size: 1rem;
+            line-height: 1.6;
+            min-height: 150px;
+            resize: vertical;
+            margin-bottom: 1rem;
+        }
+        
+        .plan-editor:focus {
+            outline: none;
+            border-color: #0066ff;
+        }
+        
+        .editor-field {
+            margin-bottom: 1.5rem;
+        }
+        
+        .editor-field label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #999;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .editor-field input,
+        .editor-field textarea {
+            width: 100%;
+            background: #1a1a1a;
+            color: #fff;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 0.75rem;
+            font-family: inherit;
+            font-size: 0.95rem;
+        }
+        
+        .editor-field input:focus,
+        .editor-field textarea:focus {
+            outline: none;
+            border-color: #0066ff;
+        }
+        
+        .date-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .tag-input-container {
+            position: relative;
+        }
+        
+        .tags-display {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .tag {
+            background: #333;
+            color: #fff;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tag .remove {
+            cursor: pointer;
+            color: #999;
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+        
+        .tag .remove:hover {
+            color: #ff4444;
+        }
+        
+        .edit-actions {
+            display: none;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .edit-actions.active {
+            display: flex;
+        }
+        
         .plan-item {
             padding: 0.5rem 0;
             border-bottom: 1px solid #333;
@@ -328,15 +437,57 @@
             <div id="planContent" class="plan-content">
                 <!-- Plan details will be inserted here -->
             </div>
-            <div class="plan-actions">
+            
+            <div id="planEditorContainer" class="plan-editor-container">
+                <div class="editor-field">
+                    <label for="planDescription">Descrizione del Piano</label>
+                    <textarea id="planDescription" class="plan-editor" placeholder="Descrivi dettagliatamente cosa vuoi analizzare..."></textarea>
+                </div>
+                
+                <div class="editor-field">
+                    <label for="planKeywords">Parole Chiave</label>
+                    <input type="text" id="keywordInput" placeholder="Aggiungi una parola chiave e premi Invio">
+                    <div id="keywordTags" class="tags-display"></div>
+                </div>
+                
+                <div class="editor-field">
+                    <label for="planPages">Pagine/Brand da Analizzare</label>
+                    <input type="text" id="pageInput" placeholder="Aggiungi una pagina/brand e premi Invio">
+                    <div id="pageTags" class="tags-display"></div>
+                </div>
+                
+                <div class="editor-field">
+                    <label>Periodo di Analisi</label>
+                    <div class="date-inputs">
+                        <input type="date" id="dateFrom" placeholder="Data inizio">
+                        <input type="date" id="dateTo" placeholder="Data fine">
+                    </div>
+                </div>
+                
+                <div class="editor-field">
+                    <label for="planCountries">Paesi (codice ISO)</label>
+                    <input type="text" id="countryInput" placeholder="Es: IT, US, GB - premi Invio per aggiungere">
+                    <div id="countryTags" class="tags-display"></div>
+                </div>
+            </div>
+            
+            <div id="planActions" class="plan-actions">
                 <button class="button" onclick="executeSearch()">
                     Avvia Ricerca
                 </button>
-                <button class="button secondary" onclick="modifySearch()">
+                <button class="button secondary" onclick="modifyPlan()">
                     Modifica
                 </button>
                 <button class="button secondary" onclick="cancelSearch()">
                     Annulla
+                </button>
+            </div>
+            <div id="editActions" class="edit-actions">
+                <button class="button" onclick="savePlan()">
+                    Salva Modifiche
+                </button>
+                <button class="button secondary" onclick="cancelEdit()">
+                    Annulla Modifiche
                 </button>
             </div>
         </div>
@@ -357,6 +508,10 @@
     
     <script>
         let currentSearchId = null;
+        let currentPlanData = null;
+        let keywordsList = [];
+        let pagesList = [];
+        let countriesList = [];
         
         function showStatus(message, type = 'info') {
             const statusEl = document.getElementById('statusMessage');
@@ -405,6 +560,7 @@
                 
                 const data = await response.json();
                 currentSearchId = data.search_id;
+                currentPlanData = data.plan;
                 
                 // Hide loading and display the search plan
                 document.getElementById('loadingContainer').classList.remove('active');
@@ -497,11 +653,145 @@
             }
         }
         
-        function modifySearch() {
-            // Go back to search input
-            document.getElementById('searchPlan').classList.remove('active');
-            document.getElementById('searchBox').classList.remove('hidden');
-            document.getElementById('searchQuery').focus();
+        function modifyPlan() {
+            // Switch to edit mode
+            const planContent = document.getElementById('planContent');
+            const planEditorContainer = document.getElementById('planEditorContainer');
+            const planActions = document.getElementById('planActions');
+            const editActions = document.getElementById('editActions');
+            
+            // Populate editor with current plan data
+            if (currentPlanData) {
+                // Description
+                document.getElementById('planDescription').value = currentPlanData.description || '';
+                
+                // Keywords
+                if (currentPlanData.keywords) {
+                    keywordsList = [...currentPlanData.keywords];
+                    updateTagsDisplay('keywordTags', keywordsList, 'keyword');
+                }
+                
+                // Pages
+                if (currentPlanData.pages) {
+                    pagesList = [...currentPlanData.pages];
+                    updateTagsDisplay('pageTags', pagesList, 'page');
+                }
+                
+                // Dates
+                if (currentPlanData.date_range) {
+                    document.getElementById('dateFrom').value = currentPlanData.date_range.from || '';
+                    document.getElementById('dateTo').value = currentPlanData.date_range.to || '';
+                }
+                
+                // Countries
+                if (currentPlanData.countries) {
+                    countriesList = [...currentPlanData.countries];
+                    updateTagsDisplay('countryTags', countriesList, 'country');
+                }
+            }
+            
+            // Show editor, hide content
+            planContent.style.display = 'none';
+            planEditorContainer.style.display = 'block';
+            planActions.style.display = 'none';
+            editActions.classList.add('active');
+            
+            // Focus on the description
+            document.getElementById('planDescription').focus();
+        }
+        
+        function savePlan() {
+            const newDescription = document.getElementById('planDescription').value.trim();
+            
+            if (!newDescription) {
+                showStatus('La descrizione del piano non può essere vuota', 'error');
+                return;
+            }
+            
+            // Update the plan data
+            if (!currentPlanData) {
+                currentPlanData = {};
+            }
+            
+            currentPlanData.description = newDescription;
+            currentPlanData.keywords = [...keywordsList];
+            currentPlanData.pages = [...pagesList];
+            currentPlanData.countries = [...countriesList];
+            
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            if (dateFrom || dateTo) {
+                currentPlanData.date_range = {
+                    from: dateFrom || '',
+                    to: dateTo || ''
+                };
+            }
+            
+            // Exit edit mode and update display
+            cancelEdit();
+            displaySearchPlan(currentPlanData);
+            showStatus('Piano modificato con successo!', 'success');
+        }
+        
+        function updateTagsDisplay(containerId, items, type) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = items.map((item, index) => 
+                `<span class="tag">
+                    ${item}
+                    <span class="remove" onclick="removeTag('${type}', ${index})">×</span>
+                </span>`
+            ).join('');
+        }
+        
+        function removeTag(type, index) {
+            if (type === 'keyword') {
+                keywordsList.splice(index, 1);
+                updateTagsDisplay('keywordTags', keywordsList, 'keyword');
+            } else if (type === 'page') {
+                pagesList.splice(index, 1);
+                updateTagsDisplay('pageTags', pagesList, 'page');
+            } else if (type === 'country') {
+                countriesList.splice(index, 1);
+                updateTagsDisplay('countryTags', countriesList, 'country');
+            }
+        }
+        
+        function addTag(inputId, type) {
+            const input = document.getElementById(inputId);
+            const value = input.value.trim();
+            
+            if (!value) return;
+            
+            if (type === 'keyword' && !keywordsList.includes(value)) {
+                keywordsList.push(value);
+                updateTagsDisplay('keywordTags', keywordsList, 'keyword');
+            } else if (type === 'page' && !pagesList.includes(value)) {
+                pagesList.push(value);
+                updateTagsDisplay('pageTags', pagesList, 'page');
+            } else if (type === 'country' && !countriesList.includes(value.toUpperCase())) {
+                countriesList.push(value.toUpperCase());
+                updateTagsDisplay('countryTags', countriesList, 'country');
+            }
+            
+            input.value = '';
+        }
+        
+        function cancelEdit() {
+            // Exit edit mode without saving
+            const planContent = document.getElementById('planContent');
+            const planEditorContainer = document.getElementById('planEditorContainer');
+            const planActions = document.getElementById('planActions');
+            const editActions = document.getElementById('editActions');
+            
+            // Reset lists
+            keywordsList = [];
+            pagesList = [];
+            countriesList = [];
+            
+            planContent.style.display = 'block';
+            planEditorContainer.style.display = 'none';
+            planActions.style.display = 'flex';
+            editActions.classList.remove('active');
         }
         
         function cancelSearch() {
@@ -577,6 +867,28 @@
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 createSearch();
+            }
+        });
+        
+        // Add event listeners for tag inputs
+        document.getElementById('keywordInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addTag('keywordInput', 'keyword');
+            }
+        });
+        
+        document.getElementById('pageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addTag('pageInput', 'page');
+            }
+        });
+        
+        document.getElementById('countryInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addTag('countryInput', 'country');
             }
         });
     </script>
