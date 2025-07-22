@@ -244,13 +244,12 @@ async function getUserByToken(token: string): Promise<string | null> {
         code: error.code,
         message: error.message,
         details: error.details,
-        hint: error.hint,
-        status: error.status
+        hint: error.hint
       });
       
       if (error.code === 'PGRST116') {
         console.log(`[DB] Token not found in DB: ${token.substring(0, 20)}...`);
-      } else if (error.status === 406) {
+      } else if (error.message && error.message.includes('406')) {
         console.error("[DB] ERROR 406 - Not Acceptable: Headers issue detected!");
         console.error("[DB] This usually means missing Accept: application/json header");
       } else {
