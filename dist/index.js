@@ -214,16 +214,20 @@ async function getFacebookToken(userId) {
     if (!supabase || !userId)
         return null;
     try {
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from("facebook_tokens")
             .select("access_token")
             .eq("user_id", userId)
             .eq("service", "competition")
-            .single();
+            .maybeSingle(); // Use maybeSingle() instead of single() to handle no rows gracefully
+        if (error) {
+            console.error("Error getting FB token:", error);
+            return null;
+        }
         return data?.access_token || null;
     }
     catch (error) {
-        console.error("Error getting FB token:", error);
+        console.error("Exception getting FB token:", error);
         return null;
     }
 }
@@ -1229,17 +1233,45 @@ app.post("/login", express_1.default.urlencoded({ extended: true }), async (req,
                     isNewUser = true;
                     // Create user in our users table
                     try {
-                        await supabase
+                        console.log("[REGISTRATION] Creating user in users table:", { userId, email });
+                        // Prima verifica se l'utente esiste già
+                        const { data: existingUser } = await supabase
                             .from("users")
-                            .insert({
-                            user_id: userId,
-                            email: email,
-                            created_at: new Date().toISOString(),
-                            updated_at: new Date().toISOString()
-                        });
+                            .select("user_id")
+                            .eq("user_id", userId)
+                            .maybeSingle();
+                        if (existingUser) {
+                            console.log("[REGISTRATION] User already exists in users table");
+                        }
+                        else {
+                            const { data: userData, error: userError } = await supabase
+                                .from("users")
+                                .insert({
+                                user_id: userId,
+                                email: email,
+                                created_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString(),
+                                is_active: true,
+                                is_admin: false
+                            })
+                                .select();
+                            if (userError) {
+                                console.error("[REGISTRATION] Error creating user in users table:", userError);
+                                console.error("[REGISTRATION] Error details:", {
+                                    code: userError.code,
+                                    message: userError.message,
+                                    details: userError.details,
+                                    hint: userError.hint
+                                });
+                                // Don't fail registration, but log the error
+                            }
+                            else {
+                                console.log("[REGISTRATION] User created successfully in users table:", userData);
+                            }
+                        }
                     }
                     catch (err) {
-                        console.error("Error creating user:", err);
+                        console.error("[REGISTRATION] Exception creating user:", err);
                     }
                 }
             }
@@ -1259,7 +1291,8 @@ app.post("/login", express_1.default.urlencoded({ extended: true }), async (req,
                     userId = data.user.id;
                     // Ensure user exists in our users table
                     try {
-                        await supabase
+                        console.log("[LOGIN] Ensuring user exists in users table:", { userId, email });
+                        const { data: upsertData, error: upsertError } = await supabase
                             .from("users")
                             .upsert({
                             user_id: userId,
@@ -1267,10 +1300,17 @@ app.post("/login", express_1.default.urlencoded({ extended: true }), async (req,
                             updated_at: new Date().toISOString()
                         }, {
                             onConflict: 'user_id'
-                        });
+                        })
+                            .select();
+                        if (upsertError) {
+                            console.error("[LOGIN] Error upserting user:", upsertError);
+                        }
+                        else {
+                            console.log("[LOGIN] User upserted successfully:", upsertData);
+                        }
                     }
                     catch (err) {
-                        console.error("Error upserting user:", err);
+                        console.error("[LOGIN] Exception upserting user:", err);
                     }
                 }
             }
@@ -1875,7 +1915,7 @@ app.get("/dashboard", async (req, res) => {
                 .select("access_token")
                 .eq("user_id", userId)
                 .eq("service", "competition")
-                .single();
+                .maybeSingle();
             hasFacebook = !!fbData;
             if (fbData) {
                 facebookToken = fbData.access_token;
@@ -2017,7 +2057,7 @@ app.get("/setup/integrations", async (req, res) => {
                 .select("access_token")
                 .eq("user_id", userId)
                 .eq("service", "competition")
-                .single();
+                .maybeSingle();
             hasFacebook = !!data;
         }
         catch (error) {
