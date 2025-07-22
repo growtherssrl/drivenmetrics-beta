@@ -204,6 +204,17 @@ const oauthStates = new Map<string, any>();
 // Active sessions
 const sessions = new Map<string, any>();
 
+// Connection rate limiting
+const connectionAttempts = new Map<string, { count: number; firstAttempt: number }>();
+const MAX_CONNECTIONS_PER_MINUTE = 20; // Increased from 5
+const RATE_LIMIT_WINDOW = 60000; // 1 minute
+
+// Active connections per user/IP
+const activeConnectionsByUser = new Map<string, Set<string>>();
+const activeConnectionsByIP = new Map<string, Set<string>>();
+const MAX_CONNECTIONS_PER_USER = 10; // Increased from 3
+const MAX_CONNECTIONS_PER_IP = 30; // Increased from 10
+
 // Database helpers
 async function getUserByToken(token: string): Promise<string | null> {
   if (!token) {
@@ -938,6 +949,21 @@ setInterval(() => {
     const toRemove = sessionsArray.slice(0, sessionsArray.length - 20);
     toRemove.forEach(([sessionId, transport]) => {
       console.log(`[SSE] Removing old session: ${sessionId}`);
+      
+      // Get auth info before deleting
+      const auth = authContext.get(sessionId);
+      
+      // Clean up connection tracking
+      if (auth?.userId && auth.userId !== 'anonymous') {
+        const userConnections = activeConnectionsByUser.get(auth.userId);
+        if (userConnections) {
+          userConnections.delete(sessionId);
+          if (userConnections.size === 0) {
+            activeConnectionsByUser.delete(auth.userId);
+          }
+        }
+      }
+      
       authContext.delete(sessionId);
       sseTransports.delete(sessionId);
       if (typeof (transport as any).close === 'function') {
@@ -945,11 +971,23 @@ setInterval(() => {
       }
     });
   }
+  
+  // Clean up old rate limit entries
+  const now = Date.now();
+  for (const [key, attempts] of connectionAttempts.entries()) {
+    if (now - attempts.firstAttempt > RATE_LIMIT_WINDOW) {
+      connectionAttempts.delete(key);
+    }
+  }
 }, 30000); // Every 30 seconds
 
 // SSE endpoint for n8n and other SSE clients - MUST BE BEFORE the general /mcp-api handler
 app.get("/mcp-api/sse", async (req, res) => {
   console.log("[SSE] New SSE connection request");
+  
+  // Get client IP for rate limiting
+  const clientIP = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown';
+  const ipAddress = Array.isArray(clientIP) ? clientIP[0] : clientIP.split(',')[0].trim();
   
   // Extract auth token
   const authHeader = req.headers.authorization;
@@ -966,6 +1004,77 @@ app.get("/mcp-api/sse", async (req, res) => {
   } else {
     console.log("[SSE] No authorization header - allowing anonymous connection");
     userId = null; // Allow connection but mark as anonymous
+  }
+  
+  // Rate limiting check
+  const rateLimitKey = userId || ipAddress;
+  const now = Date.now();
+  
+  // Log connection attempt details
+  console.log(`[SSE] Connection attempt from ${rateLimitKey} (IP: ${ipAddress}, User: ${userId || 'anonymous'})`);
+  console.log(`[SSE] Active transports: ${sseTransports.size}`);
+  
+  // Check rate limit
+  const attempts = connectionAttempts.get(rateLimitKey);
+  if (attempts) {
+    if (now - attempts.firstAttempt < RATE_LIMIT_WINDOW) {
+      if (attempts.count >= MAX_CONNECTIONS_PER_MINUTE) {
+        console.log(`[SSE] Rate limit exceeded for ${rateLimitKey} - ${attempts.count} attempts in window`);
+        res.status(429).json({ 
+          error: "Too many connections", 
+          message: "Please wait before creating new connections",
+          details: {
+            attempts: attempts.count,
+            limit: MAX_CONNECTIONS_PER_MINUTE,
+            windowMs: RATE_LIMIT_WINDOW
+          }
+        });
+        return;
+      }
+      attempts.count++;
+      console.log(`[SSE] Connection attempt ${attempts.count}/${MAX_CONNECTIONS_PER_MINUTE} for ${rateLimitKey}`);
+    } else {
+      // Reset window
+      connectionAttempts.set(rateLimitKey, { count: 1, firstAttempt: now });
+      console.log(`[SSE] Rate limit window reset for ${rateLimitKey}`);
+    }
+  } else {
+    connectionAttempts.set(rateLimitKey, { count: 1, firstAttempt: now });
+    console.log(`[SSE] First connection attempt for ${rateLimitKey}`);
+  }
+  
+  // Check active connections limit per user
+  if (userId) {
+    const userConnections = activeConnectionsByUser.get(userId) || new Set();
+    console.log(`[SSE] User ${userId} has ${userConnections.size}/${MAX_CONNECTIONS_PER_USER} active connections`);
+    if (userConnections.size >= MAX_CONNECTIONS_PER_USER) {
+      console.log(`[SSE] Too many active connections for user ${userId} - ${userConnections.size} connections`);
+      res.status(429).json({ 
+        error: "Too many active connections", 
+        message: "Maximum connections per user exceeded",
+        details: {
+          active: userConnections.size,
+          limit: MAX_CONNECTIONS_PER_USER
+        }
+      });
+      return;
+    }
+  }
+  
+  // Check active connections limit per IP
+  const ipConnections = activeConnectionsByIP.get(ipAddress) || new Set();
+  console.log(`[SSE] IP ${ipAddress} has ${ipConnections.size}/${MAX_CONNECTIONS_PER_IP} active connections`);
+  if (ipConnections.size >= MAX_CONNECTIONS_PER_IP) {
+    console.log(`[SSE] Too many active connections for IP ${ipAddress} - ${ipConnections.size} connections`);
+    res.status(429).json({ 
+      error: "Too many active connections", 
+      message: "Maximum connections per IP exceeded",
+      details: {
+        active: ipConnections.size,
+        limit: MAX_CONNECTIONS_PER_IP
+      }
+    });
+    return;
   }
   
   console.log("[SSE] Connection established for user:", userId || "anonymous");
@@ -986,6 +1095,17 @@ app.get("/mcp-api/sse", async (req, res) => {
     
     // Store auth info for this transport
     authContext.set(sessionId, { userId: userId || 'anonymous', token: authHeader?.slice(7) || '' });
+    
+    // Track active connections
+    if (userId) {
+      const userConnections = activeConnectionsByUser.get(userId) || new Set();
+      userConnections.add(sessionId);
+      activeConnectionsByUser.set(userId, userConnections);
+    }
+    
+    const ipConnections = activeConnectionsByIP.get(ipAddress) || new Set();
+    ipConnections.add(sessionId);
+    activeConnectionsByIP.set(ipAddress, ipConnections);
     
     // Connect the transport to our MCP server
     await mcpServer.connect(transport);
@@ -1030,6 +1150,29 @@ app.get("/mcp-api/sse", async (req, res) => {
     req.on('close', () => {
       const transportSessionId = (transport as any).sessionId;
       console.log("[SSE] Client disconnected, session:", transportSessionId);
+      
+      // Get auth info before deleting
+      const auth = authContext.get(transportSessionId);
+      
+      // Clean up connection tracking
+      if (auth?.userId && auth.userId !== 'anonymous') {
+        const userConnections = activeConnectionsByUser.get(auth.userId);
+        if (userConnections) {
+          userConnections.delete(transportSessionId);
+          if (userConnections.size === 0) {
+            activeConnectionsByUser.delete(auth.userId);
+          }
+        }
+      }
+      
+      const ipConnections = activeConnectionsByIP.get(ipAddress);
+      if (ipConnections) {
+        ipConnections.delete(transportSessionId);
+        if (ipConnections.size === 0) {
+          activeConnectionsByIP.delete(ipAddress);
+        }
+      }
+      
       authContext.delete(transportSessionId);
       sseTransports.delete(transportSessionId);
       if (typeof (transport as any).close === 'function') {
