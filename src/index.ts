@@ -2404,7 +2404,7 @@ app.get("/logout", (req, res) => {
 app.options("/api/generate-token", (req, res) => {
   res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
   res.header("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header("Access-Control-Allow-Credentials", "true");
   res.status(200).end();
 });
@@ -2420,17 +2420,36 @@ app.post("/api/generate-token", async (req, res) => {
   console.log("[GENERATE-TOKEN] Headers:", req.headers);
   console.log("[GENERATE-TOKEN] Cookies:", req.cookies);
   
-  const sessionId = req.cookies?.session_id;
-  console.log("[GENERATE-TOKEN] Session ID from cookie:", sessionId);
-  console.log("[GENERATE-TOKEN] Active sessions:", Array.from(sessions.keys()));
+  let userId: string | null = null;
   
-  if (!sessionId || !sessions.has(sessionId)) {
-    console.log("[GENERATE-TOKEN] No valid session found - sessionId:", sessionId, "has session:", sessionId ? sessions.has(sessionId) : false);
-    return res.status(401).json({ error: "Not authenticated" });
+  // First try Bearer token authentication
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    console.log("[GENERATE-TOKEN] Bearer token provided:", token.substring(0, 10) + "...");
+    userId = await getUserByToken(token);
+    
+    if (userId) {
+      console.log("[GENERATE-TOKEN] User authenticated via Bearer token:", userId);
+    }
   }
   
-  const session = sessions.get(sessionId);
-  const userId = session.user_id;
+  // If no Bearer token or invalid, try session cookie
+  if (!userId) {
+    const sessionId = req.cookies?.session_id;
+    console.log("[GENERATE-TOKEN] Session ID from cookie:", sessionId);
+    console.log("[GENERATE-TOKEN] Active sessions:", Array.from(sessions.keys()));
+    
+    if (!sessionId || !sessions.has(sessionId)) {
+      console.log("[GENERATE-TOKEN] No valid authentication - no Bearer token and no session");
+      return res.status(401).json({ error: "Not authenticated. Provide Bearer token or valid session." });
+    }
+    
+    const session = sessions.get(sessionId);
+    userId = session.user_id;
+    console.log("[GENERATE-TOKEN] User authenticated via session:", userId);
+  }
+  
   console.log("[GENERATE-TOKEN] Generating token for user:", userId);
   
   // Generate a new API token
