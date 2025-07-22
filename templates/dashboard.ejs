@@ -230,6 +230,30 @@
             background: #ef444433;
             color: #f87171;
         }
+        
+        /* Notifications */
+        .notification {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 16px 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .notification.success {
+            background: #10b98133;
+            color: #4ade80;
+            border: 1px solid #10b981;
+        }
+        
+        .notification.error {
+            background: #ef444433;
+            color: #f87171;
+            border: 1px solid #ef4444;
+        }
     </style>
 </head>
 <body>
@@ -245,6 +269,24 @@
             </div>
         </div>
     </header>
+
+    <!-- Notifications -->
+    <% if (locals.success === 'token_regenerated') { %>
+    <div class="notification success">
+        <span>✅</span>
+        <span>API token regenerated successfully! Your new token is displayed below.</span>
+    </div>
+    <% } else if (locals.error === 'token_generation_failed') { %>
+    <div class="notification error">
+        <span>❌</span>
+        <span>Failed to regenerate API token. Please try again or contact support.</span>
+    </div>
+    <% } else if (locals.error === 'unexpected_error') { %>
+    <div class="notification error">
+        <span>❌</span>
+        <span>An unexpected error occurred. Please try again.</span>
+    </div>
+    <% } %>
 
     <!-- Main Content -->
     <main class="container">

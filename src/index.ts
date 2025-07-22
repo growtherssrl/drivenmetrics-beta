@@ -899,7 +899,7 @@ app.get("/user/api-key/regenerate", async (req, res) => {
     
     if (error) {
       console.error("[REGENERATE] Error creating new token:", error);
-      return res.redirect("/user/dashboard?error=token_generation_failed");
+      return res.redirect("/dashboard?error=token_generation_failed");
     }
     
     console.log("✅ API token regenerated successfully for user:", userId);
@@ -908,11 +908,11 @@ app.get("/user/api-key/regenerate", async (req, res) => {
     session.new_api_token = newToken;
     
     // Redirect back to dashboard with success
-    return res.redirect("/user/dashboard?success=token_regenerated");
+    return res.redirect("/dashboard?success=token_regenerated");
     
   } catch (error) {
     console.error("[REGENERATE] Unexpected error:", error);
-    return res.redirect("/user/dashboard?error=unexpected_error");
+    return res.redirect("/dashboard?error=unexpected_error");
   }
 });
 
@@ -2482,6 +2482,12 @@ app.get("/dashboard", async (req, res) => {
     }
   }
   
+  // Check for new token from regeneration
+  if (session.new_api_token) {
+    apiToken = session.new_api_token;
+    delete session.new_api_token; // Show it only once
+  }
+  
   try {
     res.render('dashboard', {
       user: session,
@@ -2489,7 +2495,9 @@ app.get("/dashboard", async (req, res) => {
       has_claude: hasClaude,
       api_calls: apiCalls,
       api_token: apiToken,
-      facebook_token: facebookToken
+      facebook_token: facebookToken,
+      success: req.query.success,
+      error: req.query.error
     });
   } catch (err) {
     console.error('Dashboard template error:', err);
