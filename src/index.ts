@@ -212,9 +212,9 @@ const RATE_LIMIT_WINDOW = 60000; // 1 minute
 // Active connections per user/IP
 const activeConnectionsByUser = new Map<string, Set<string>>();
 const activeConnectionsByIP = new Map<string, Set<string>>();
-const MAX_CONNECTIONS_PER_USER = 10; // Increased from 3
-const MAX_CONNECTIONS_PER_IP = 30; // Increased from 10
-const MAX_ANONYMOUS_CONNECTIONS = 5; // Limit anonymous connections
+const MAX_CONNECTIONS_PER_USER = 50; // Aumentato per n8n multi-agent
+const MAX_CONNECTIONS_PER_IP = 100; // Aumentato per n8n multi-agent
+const MAX_ANONYMOUS_CONNECTIONS = 50; // Aumentato per n8n multi-agent
 
 // Database helpers
 async function getUserByToken(token: string): Promise<string | null> {
@@ -1013,7 +1013,7 @@ app.get("/mcp-api/sse", async (req, res) => {
     }
   } else {
     console.log("[SSE] No authorization header - allowing anonymous connection");
-    console.log("[SSE] Full headers:", JSON.stringify(req.headers, null, 2));
+    // Rimosso logging verboso degli headers per non intasare i log
     userId = null; // Allow connection but mark as anonymous
   }
   
@@ -1021,12 +1021,13 @@ app.get("/mcp-api/sse", async (req, res) => {
   const rateLimitKey = userId || ipAddress;
   const now = Date.now();
   
-  // Log connection attempt details
-  console.log(`[SSE] Connection attempt from ${rateLimitKey} (IP: ${ipAddress}, User: ${userId || 'anonymous'})`);
-  console.log(`[SSE] Active transports: ${sseTransports.size}`);
-  
   // Check rate limit
   const attempts = connectionAttempts.get(rateLimitKey);
+  
+  // Log solo se ci sono problemi o è un nuovo utente
+  if (sseTransports.size > 20 || !attempts) {
+    console.log(`[SSE] Connection from ${userId || 'anonymous'} - Active: ${sseTransports.size}`);
+  }
   if (attempts) {
     if (now - attempts.firstAttempt < RATE_LIMIT_WINDOW) {
       if (attempts.count >= MAX_CONNECTIONS_PER_MINUTE) {
@@ -1043,21 +1044,22 @@ app.get("/mcp-api/sse", async (req, res) => {
         return;
       }
       attempts.count++;
-      console.log(`[SSE] Connection attempt ${attempts.count}/${MAX_CONNECTIONS_PER_MINUTE} for ${rateLimitKey}`);
+      // Rimosso logging per ogni tentativo
     } else {
       // Reset window
       connectionAttempts.set(rateLimitKey, { count: 1, firstAttempt: now });
-      console.log(`[SSE] Rate limit window reset for ${rateLimitKey}`);
     }
   } else {
     connectionAttempts.set(rateLimitKey, { count: 1, firstAttempt: now });
-    console.log(`[SSE] First connection attempt for ${rateLimitKey}`);
   }
   
   // Check active connections limit per user
   if (userId) {
     const userConnections = activeConnectionsByUser.get(userId) || new Set();
-    console.log(`[SSE] User ${userId} has ${userConnections.size}/${MAX_CONNECTIONS_PER_USER} active connections`);
+    // Log solo se vicino al limite
+    if (userConnections.size >= MAX_CONNECTIONS_PER_USER - 5) {
+      console.log(`[SSE] User ${userId} has ${userConnections.size}/${MAX_CONNECTIONS_PER_USER} active connections`);
+    }
     if (userConnections.size >= MAX_CONNECTIONS_PER_USER) {
       console.log(`[SSE] Too many active connections for user ${userId} - ${userConnections.size} connections`);
       res.status(429).json({ 
@@ -1073,7 +1075,10 @@ app.get("/mcp-api/sse", async (req, res) => {
   } else {
     // Check limit for anonymous connections
     const anonymousConnections = activeConnectionsByUser.get('anonymous') || new Set();
-    console.log(`[SSE] Anonymous connections: ${anonymousConnections.size}/${MAX_ANONYMOUS_CONNECTIONS}`);
+    // Log solo se vicino al limite
+    if (anonymousConnections.size >= MAX_ANONYMOUS_CONNECTIONS - 5) {
+      console.log(`[SSE] Anonymous connections: ${anonymousConnections.size}/${MAX_ANONYMOUS_CONNECTIONS}`);
+    }
     if (anonymousConnections.size >= MAX_ANONYMOUS_CONNECTIONS) {
       console.log(`[SSE] Too many anonymous connections - ${anonymousConnections.size} connections`);
       res.status(429).json({ 
@@ -1091,7 +1096,10 @@ app.get("/mcp-api/sse", async (req, res) => {
   
   // Check active connections limit per IP
   const ipConnections = activeConnectionsByIP.get(ipAddress) || new Set();
-  console.log(`[SSE] IP ${ipAddress} has ${ipConnections.size}/${MAX_CONNECTIONS_PER_IP} active connections`);
+  // Log solo se vicino al limite
+  if (ipConnections.size >= MAX_CONNECTIONS_PER_IP - 10) {
+    console.log(`[SSE] IP ${ipAddress} has ${ipConnections.size}/${MAX_CONNECTIONS_PER_IP} active connections`);
+  }
   if (ipConnections.size >= MAX_CONNECTIONS_PER_IP) {
     console.log(`[SSE] Too many active connections for IP ${ipAddress} - ${ipConnections.size} connections`);
     res.status(429).json({ 
