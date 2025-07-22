@@ -500,7 +500,7 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           ad_type: "ALL",
           ad_active_status: "ALL",
           search_terms: args?.search_terms || "",
-          limit: Math.min(args?.limit || 25, 50), // Cap at 50 to reduce response time
+          limit: Math.min(Number(args?.limit) || 25, 50), // Cap at 50 to reduce response time
         };
         
         // Add optional filters
@@ -550,7 +550,7 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
           ad_type: "ALL",
           ad_active_status: "ALL",
           search_page_ids: args?.page_id || "",
-          limit: Math.min(args?.limit || 25, 50), // Cap at 50 to reduce response time
+          limit: Math.min(Number(args?.limit) || 25, 50), // Cap at 50 to reduce response time
         };
         
         // Add optional filters
