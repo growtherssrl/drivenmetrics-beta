@@ -258,27 +258,9 @@ async function getFacebookToken(userId: string): Promise<string | null> {
 
 // Get Facebook App Access Token
 async function getAppAccessToken(): Promise<string | null> {
-  if (!FB_APP_ID || !FB_APP_SECRET) {
-    console.error("Facebook App ID or Secret not configured");
-    return null;
-  }
-  
-  try {
-    console.log("Requesting App Access Token with App ID:", FB_APP_ID);
-    const response = await axios.get(`https://graph.facebook.com/${FB_GRAPH_VERSION}/oauth/access_token`, {
-      params: {
-        client_id: FB_APP_ID,
-        client_secret: FB_APP_SECRET,
-        grant_type: 'client_credentials'
-      }
-    });
-    
-    console.log("App Access Token received successfully");
-    return response.data.access_token;
-  } catch (error: any) {
-    console.error("Error getting app access token:", error.response?.data || error.message);
-    return null;
-  }
+  // DISABLED - App Access Token doesn't work for Ad Library API
+  console.error("[FB_API] App Access Token is disabled. Ad Library API requires a User Access Token.");
+  return null;
 }
 
 // Facebook API helper
@@ -297,7 +279,11 @@ async function fetchAdsFromFacebook(params: any, fbToken: string | null): Promis
       console.log("No user token provided, getting App Access Token...");
       accessToken = await getAppAccessToken();
       if (!accessToken) {
-        return { error: "Failed to get Facebook access token" };
+        return { 
+          error: "User authentication required",
+          message: "L'Ad Library API richiede un User Access Token valido. L'App Access Token non è supportato.",
+          instructions: "Configura un token utente valido nel database per questo utente."
+        };
       }
       console.log("Using App Access Token for Ad Library search");
     } else {
@@ -941,6 +927,25 @@ app.get("/.well-known/oauth-authorization-server", (req, res) => {
 
 // Store active SSE transports by session ID  
 const sseTransports = new Map<string, SSEServerTransport>();
+
+// Clean up old sessions periodically to prevent memory leaks
+setInterval(() => {
+  const activeSessions = sseTransports.size;
+  if (activeSessions > 20) {
+    console.log(`[SSE] WARNING: ${activeSessions} sessions active, cleaning up old ones`);
+    // Keep only the last 20 sessions
+    const sessionsArray = Array.from(sseTransports.entries());
+    const toRemove = sessionsArray.slice(0, sessionsArray.length - 20);
+    toRemove.forEach(([sessionId, transport]) => {
+      console.log(`[SSE] Removing old session: ${sessionId}`);
+      authContext.delete(sessionId);
+      sseTransports.delete(sessionId);
+      if (typeof (transport as any).close === 'function') {
+        (transport as any).close();
+      }
+    });
+  }
+}, 30000); // Every 30 seconds
 
 // SSE endpoint for n8n and other SSE clients - MUST BE BEFORE the general /mcp-api handler
 app.get("/mcp-api/sse", async (req, res) => {
