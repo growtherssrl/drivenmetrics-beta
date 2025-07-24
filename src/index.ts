@@ -3735,7 +3735,7 @@ app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
   // If HTML format is requested and results are available
   if (format === 'html' && search.status === 'completed' && search.results) {
     const session = sessions.get(sessionId);
-    return res.render('deep_marketing_results', {
+    return res.render('deep_marketing_results_v2', {
       user: session,
       query: search.query,
       results: search.results,
