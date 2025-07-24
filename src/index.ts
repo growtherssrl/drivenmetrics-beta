@@ -3244,6 +3244,9 @@ app.get("/deep-marketing", async (req, res) => {
       
       if (data) {
         searchHistory = data;
+        console.log(`[DEEP MARKETING] Loaded ${data.length} searches for user ${session.user_id}:`, 
+          data.map(s => ({ id: s.id, query: s.query.substring(0, 30) + '...' }))
+        );
       }
     } catch (error) {
       console.error('Error loading search history:', error);
@@ -3857,6 +3860,26 @@ app.delete("/api/deep-marketing/search/:searchId", async (req, res) => {
   );
   
   try {
+    // First, check if the search exists
+    const { data: checkData, error: checkError } = await supabase
+      .from('deep_marketing_searches')
+      .select('id, user_id, query')
+      .eq('id', searchId)
+      .single();
+    
+    if (checkError) {
+      console.log(`[DELETE SEARCH] Error checking search:`, checkError);
+    } else if (checkData) {
+      console.log(`[DELETE SEARCH] Found search:`, {
+        id: checkData.id,
+        user_id: checkData.user_id,
+        query: checkData.query,
+        matches_user: checkData.user_id === session.user_id
+      });
+    } else {
+      console.log(`[DELETE SEARCH] No search found with ID: ${searchId}`);
+    }
+    
     // Delete the search (RLS will ensure only the owner can delete)
     const { data, error } = await supabase
       .from('deep_marketing_searches')

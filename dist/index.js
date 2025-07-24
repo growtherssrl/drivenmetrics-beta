@@ -2913,6 +2913,7 @@ app.get("/deep-marketing", async (req, res) => {
                 .limit(3); // Show only last 3 searches
             if (data) {
                 searchHistory = data;
+                console.log(`[DEEP MARKETING] Loaded ${data.length} searches for user ${session.user_id}:`, data.map(s => ({ id: s.id, query: s.query.substring(0, 30) + '...' })));
             }
         }
         catch (error) {
@@ -3447,6 +3448,26 @@ app.delete("/api/deep-marketing/search/:searchId", async (req, res) => {
     // Initialize Supabase client with the environment variable key
     const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL || "", process.env.SUPABASE_ANON_KEY || "");
     try {
+        // First, check if the search exists
+        const { data: checkData, error: checkError } = await supabase
+            .from('deep_marketing_searches')
+            .select('id, user_id, query')
+            .eq('id', searchId)
+            .single();
+        if (checkError) {
+            console.log(`[DELETE SEARCH] Error checking search:`, checkError);
+        }
+        else if (checkData) {
+            console.log(`[DELETE SEARCH] Found search:`, {
+                id: checkData.id,
+                user_id: checkData.user_id,
+                query: checkData.query,
+                matches_user: checkData.user_id === session.user_id
+            });
+        }
+        else {
+            console.log(`[DELETE SEARCH] No search found with ID: ${searchId}`);
+        }
         // Delete the search (RLS will ensure only the owner can delete)
         const { data, error } = await supabase
             .from('deep_marketing_searches')
