@@ -3446,13 +3446,30 @@ app.delete("/api/deep-marketing/search/:searchId", async (req, res) => {
     const { searchId } = req.params;
     console.log(`[DELETE SEARCH] Attempting to delete search ${searchId} for user ${session.user_id}`);
     // Initialize Supabase client with the environment variable key
-    const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL || "", process.env.SUPABASE_ANON_KEY || "");
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+        console.error("[DELETE SEARCH] Supabase credentials not configured");
+        return res.status(500).json({ error: "Database not configured" });
+    }
+    const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
     try {
-        // First, check if the search exists
+        // First, check if the search exists without user filter
+        const { data: checkDataNoUser, error: checkErrorNoUser } = await supabase
+            .from('deep_marketing_searches')
+            .select('id, user_id')
+            .eq('id', searchId)
+            .single();
+        if (checkErrorNoUser) {
+            console.log(`[DELETE SEARCH] Error checking search without user filter:`, checkErrorNoUser);
+        }
+        else if (checkDataNoUser) {
+            console.log(`[DELETE SEARCH] Search exists in DB with user_id:`, checkDataNoUser.user_id);
+        }
+        // Now check with user filter
         const { data: checkData, error: checkError } = await supabase
             .from('deep_marketing_searches')
             .select('id, user_id, query')
             .eq('id', searchId)
+            .eq('user_id', session.user_id)
             .single();
         if (checkError) {
             console.log(`[DELETE SEARCH] Error checking search:`, checkError);
