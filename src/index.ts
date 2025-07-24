@@ -3853,16 +3853,11 @@ app.delete("/api/deep-marketing/search/:searchId", async (req, res) => {
   
   console.log(`[DELETE SEARCH] Attempting to delete search ${searchId} for user ${session.user_id}`);
   
-  // Initialize Supabase client with the environment variable key
-  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-    console.error("[DELETE SEARCH] Supabase credentials not configured");
+  // Check if Supabase is configured
+  if (!supabase) {
+    console.error("[DELETE SEARCH] Supabase client not initialized");
     return res.status(500).json({ error: "Database not configured" });
   }
-  
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_ANON_KEY
-  );
   
   try {
     // First, check if the search exists without user filter
@@ -3937,12 +3932,6 @@ app.get("/api/deep-marketing/search/:searchId/plan", async (req, res) => {
   const { searchId } = req.params;
   
   console.log(`[PLAN VIEW] Loading search plan - searchId: ${searchId}, userId: ${session.user_id}`);
-  
-  // Initialize Supabase client with the environment variable key
-  const supabase = createClient(
-    process.env.SUPABASE_URL || "",
-    process.env.SUPABASE_ANON_KEY || ""
-  );
   
   let search = null;
   

@@ -3445,12 +3445,11 @@ app.delete("/api/deep-marketing/search/:searchId", async (req, res) => {
     const session = sessions.get(sessionId);
     const { searchId } = req.params;
     console.log(`[DELETE SEARCH] Attempting to delete search ${searchId} for user ${session.user_id}`);
-    // Initialize Supabase client with the environment variable key
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-        console.error("[DELETE SEARCH] Supabase credentials not configured");
+    // Check if Supabase is configured
+    if (!supabase) {
+        console.error("[DELETE SEARCH] Supabase client not initialized");
         return res.status(500).json({ error: "Database not configured" });
     }
-    const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
     try {
         // First, check if the search exists without user filter
         const { data: checkDataNoUser, error: checkErrorNoUser } = await supabase
@@ -3517,8 +3516,6 @@ app.get("/api/deep-marketing/search/:searchId/plan", async (req, res) => {
     const session = sessions.get(sessionId);
     const { searchId } = req.params;
     console.log(`[PLAN VIEW] Loading search plan - searchId: ${searchId}, userId: ${session.user_id}`);
-    // Initialize Supabase client with the environment variable key
-    const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL || "", process.env.SUPABASE_ANON_KEY || "");
     let search = null;
     // Try to load from database
     if (supabase) {
