@@ -3708,6 +3708,9 @@ app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
   const { searchId } = req.params;
   const search = activeSearches.get(searchId);
   
+  // Check if format=html is requested
+  const format = req.query.format;
+  
   if (!search) {
     // Try to load from database
     if (supabase) {
@@ -3727,6 +3730,17 @@ app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
     }
     
     return res.status(404).json({ error: "Search not found" });
+  }
+  
+  // If HTML format is requested and results are available
+  if (format === 'html' && search.status === 'completed' && search.results) {
+    const session = sessions.get(sessionId);
+    return res.render('deep_marketing_results', {
+      user: session,
+      query: search.query,
+      results: search.results,
+      searchId: searchId
+    });
   }
   
   res.json(search);

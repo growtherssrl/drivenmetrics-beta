@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Risultati Analisi - <%= query %> | Drivenmetrics</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .header {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .header p {
+            color: #999;
+        }
+        
+        .summary-box {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            border-left: 4px solid #0066ff;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        
+        .summary-item {
+            text-align: center;
+        }
+        
+        .summary-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #0066ff;
+        }
+        
+        .summary-label {
+            color: #999;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+        }
+        
+        .key-insights {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+        
+        .insights-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        
+        .insight-category {
+            background: #0a0a0a;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+        
+        .insight-category h4 {
+            color: #0066ff;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .insight-list {
+            list-style: none;
+        }
+        
+        .insight-list li {
+            padding: 0.5rem 0;
+            font-size: 0.9rem;
+            border-bottom: 1px solid #222;
+            color: #e0e0e0;
+        }
+        
+        .insight-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .section {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+        
+        .section h2 {
+            font-size: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .section-content {
+            background: #0a0a0a;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #333;
+            white-space: pre-wrap;
+            line-height: 1.8;
+            color: #e0e0e0;
+        }
+        
+        .section-content strong {
+            color: #0066ff;
+        }
+        
+        .section-content h3 {
+            color: #fff;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: #999;
+        }
+        
+        .tab.active {
+            background: #0066ff;
+            border-color: #0066ff;
+            color: #fff;
+        }
+        
+        .tab:hover {
+            border-color: #0066ff;
+            color: #fff;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .button {
+            background: #0066ff;
+            color: #fff;
+            border: none;
+            padding: 0.75rem 2rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .button:hover {
+            background: #0052cc;
+        }
+        
+        .button.secondary {
+            background: #333;
+        }
+        
+        .button.secondary:hover {
+            background: #444;
+        }
+        
+        .footer-info {
+            text-align: center;
+            margin-top: 3rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+        
+        .footer-info .heart {
+            color: #ff4444;
+        }
+        
+        .warning-badge {
+            background: #ff4444;
+            color: #fff;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+        }
+        
+        .success-badge {
+            background: #00ff44;
+            color: #000;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .summary-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div style="background: #1a1a1a; border-bottom: 1px solid #333; padding: 1rem 0;">
+        <div style="max-width: 1200px; margin: 0 auto; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between;">
+            <img src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" alt="Drivenmetrics" style="height: 32px;">
+            <a href="/deep-marketing" style="color: #999; text-decoration: none; font-size: 0.9rem;">← Nuova Ricerca</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="header">
+            <h1><%= results.summary.title %></h1>
+            <p>Analisi completata il <%= new Date(results.summary.timestamp).toLocaleString('it-IT') %></p>
+        </div>
+        
+        <!-- Summary Box -->
+        <div class="summary-box">
+            <h2>📊 Riepilogo Analisi</h2>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-number"><%= results.summary.totalAdsAnalyzed || 60 %></div>
+                    <div class="summary-label">Annunci Analizzati</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number"><%= results.summary.queries.length %></div>
+                    <div class="summary-label">Query Eseguite</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number"><%= results.keyInsights.brandUfficiali.length + results.keyInsights.retailer.length + results.keyInsights.pmi.length %></div>
+                    <div class="summary-label">Player Identificati</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number"><%= results.keyInsights.segnalazioni.length %></div>
+                    <div class="summary-label">Segnalazioni</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Key Insights -->
+        <div class="key-insights">
+            <h2>🔍 Insights Chiave</h2>
+            <div class="insights-grid">
+                <div class="insight-category">
+                    <h4>🥇 Brand Ufficiali</h4>
+                    <ul class="insight-list">
+                        <% results.keyInsights.brandUfficiali.forEach(brand => { %>
+                            <li><%- brand %></li>
+                        <% }) %>
+                    </ul>
+                </div>
+                
+                <div class="insight-category">
+                    <h4>🏪 Retailer e Rivenditori</h4>
+                    <ul class="insight-list">
+                        <% results.keyInsights.retailer.forEach(retailer => { %>
+                            <li><%- retailer %></li>
+                        <% }) %>
+                    </ul>
+                </div>
+                
+                <div class="insight-category">
+                    <h4>🏬 PMI e Negozi Locali</h4>
+                    <ul class="insight-list">
+                        <% results.keyInsights.pmi.forEach(pmi => { %>
+                            <li><%- pmi %></li>
+                        <% }) %>
+                    </ul>
+                </div>
+                
+                <% if (results.keyInsights.segnalazioni.length > 0) { %>
+                <div class="insight-category" style="border-color: #ff4444;">
+                    <h4 style="color: #ff4444;">🚨 Segnalazioni</h4>
+                    <ul class="insight-list">
+                        <% results.keyInsights.segnalazioni.forEach(segnalazione => { %>
+                            <li style="color: #ff9999;"><%- segnalazione %></li>
+                        <% }) %>
+                    </ul>
+                </div>
+                <% } %>
+            </div>
+        </div>
+        
+        <!-- Tabs Navigation -->
+        <div class="tabs">
+            <div class="tab active" onclick="showTab('overview')">📊 Panoramica</div>
+            <div class="tab" onclick="showTab('messaging')">💬 Messaging</div>
+            <div class="tab" onclick="showTab('creative')">🎨 Creatività</div>
+            <div class="tab" onclick="showTab('insights')">💡 Insights</div>
+            <div class="tab" onclick="showTab('full')">📄 Report Completo</div>
+        </div>
+        
+        <!-- Tab Contents -->
+        <div id="overview" class="tab-content active">
+            <div class="section">
+                <h2><%= results.sections.marketOverview.title %></h2>
+                <div class="section-content"><%- results.sections.marketOverview.content %></div>
+            </div>
+            
+            <div class="section">
+                <h2><%= results.sections.competitors.title %></h2>
+                <div class="section-content"><%- results.sections.competitors.content %></div>
+            </div>
+        </div>
+        
+        <div id="messaging" class="tab-content">
+            <div class="section">
+                <h2><%= results.sections.messagingAnalysis.title %></h2>
+                <div class="section-content"><%- results.sections.messagingAnalysis.content %></div>
+            </div>
+        </div>
+        
+        <div id="creative" class="tab-content">
+            <div class="section">
+                <h2><%= results.sections.creativeStrategy.title %></h2>
+                <div class="section-content"><%- results.sections.creativeStrategy.content %></div>
+            </div>
+            
+            <div class="section">
+                <h2><%= results.sections.detailedAds.title %></h2>
+                <div class="section-content"><%- results.sections.detailedAds.content %></div>
+            </div>
+        </div>
+        
+        <div id="insights" class="tab-content">
+            <div class="section">
+                <h2><%= results.sections.strategicInsights.title %></h2>
+                <div class="section-content"><%- results.sections.strategicInsights.content %></div>
+            </div>
+            
+            <% if (results.sections.recommendations.content) { %>
+            <div class="section">
+                <h2><%= results.sections.recommendations.title %></h2>
+                <div class="section-content"><%- results.sections.recommendations.content %></div>
+            </div>
+            <% } %>
+        </div>
+        
+        <div id="full" class="tab-content">
+            <div class="section">
+                <h2>📄 Report Completo</h2>
+                <div class="section-content"><%- results.fullReport.replace(/\n/g, '<br>') %></div>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="button" onclick="exportReport()">📥 Esporta Report</button>
+            <a href="/deep-marketing" class="button secondary">🔍 Nuova Ricerca</a>
+            <button class="button secondary" onclick="window.print()">🖨️ Stampa</button>
+        </div>
+        
+        <div class="footer-info">
+            Crafted with <span class="heart">❤️</span> e AI by Growthers
+        </div>
+    </div>
+    
+    <script>
+        // Dati risultati passati dal server
+        const analysisResults = <%- JSON.stringify(results) %>;
+        const searchQuery = "<%= query %>";
+        
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        function exportReport() {
+            const reportData = {
+                query: searchQuery,
+                timestamp: new Date().toISOString(),
+                results: analysisResults
+            };
+            
+            const dataStr = JSON.stringify(reportData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `deep-marketing-report-${new Date().toISOString().split('T')[0]}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+        }
+        
+        // Print styles
+        const printStyles = `
+            @media print {
+                body { background: white; color: black; }
+                .container { max-width: 100%; }
+                .section, .summary-box, .key-insights { 
+                    background: white; 
+                    border: 1px solid #ddd; 
+                    color: black;
+                    page-break-inside: avoid;
+                }
+                .tabs, .action-buttons, .footer-info { display: none; }
+                .tab-content { display: block !important; }
+                .section-content { background: #f5f5f5; color: black; }
+                a { color: black; text-decoration: underline; }
+            }
+        `;
+        
+        const styleSheet = document.createElement("style");
+        styleSheet.textContent = printStyles;
+        document.head.appendChild(styleSheet);
+    </script>
+</body>
+</html>
