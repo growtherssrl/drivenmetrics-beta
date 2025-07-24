@@ -489,7 +489,7 @@
             <p>Analizza le campagne pubblicitarie dei tuoi competitor con l'intelligenza artificiale</p>
         </div>
         
-        <% if (searchHistory && searchHistory.length > 0) { %>
+        <% if (typeof searchHistory !== 'undefined' && searchHistory && searchHistory.length > 0) { %>
         <div class="search-history">
             <h3>📋 Ricerche Recenti</h3>
             <div class="history-grid">
