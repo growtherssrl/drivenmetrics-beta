@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deep Marketing Analysis - Drivenmetrics</title>
+    <title>Deep Marketing Intelligence - Drivenmetrics</title>
     <style>
         * {
             margin: 0;
@@ -393,6 +393,86 @@
         .footer-info .heart {
             color: #ff4444;
         }
+        
+        .search-history {
+            background: #1a1a1a;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+        }
+        
+        .search-history h3 {
+            margin-bottom: 1.5rem;
+            color: #fff;
+            font-size: 1.25rem;
+        }
+        
+        .history-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 1rem;
+        }
+        
+        .history-card {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .history-card:hover {
+            border-color: #0066ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.1);
+        }
+        
+        .history-query {
+            color: #fff;
+            font-size: 0.95rem;
+            margin-bottom: 0.75rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .history-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+        }
+        
+        .history-date {
+            color: #666;
+        }
+        
+        .history-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        
+        .history-status.completed {
+            background: #00ff4420;
+            color: #00ff44;
+        }
+        
+        .history-status.executing {
+            background: #ffaa0020;
+            color: #ffaa00;
+        }
+        
+        .history-status.error {
+            background: #ff444420;
+            color: #ff4444;
+        }
+        
+        .history-status.planning {
+            background: #0066ff20;
+            color: #0066ff;
+        }
     </style>
 </head>
 <body>
@@ -405,9 +485,36 @@
     
     <div class="container">
         <div class="header">
-            <h1>🔍 Deep Marketing Analysis</h1>
+            <h1>🔍 Deep Marketing Intelligence</h1>
             <p>Analizza le campagne pubblicitarie dei tuoi competitor con l'intelligenza artificiale</p>
         </div>
+        
+        <% if (searchHistory && searchHistory.length > 0) { %>
+        <div class="search-history">
+            <h3>📋 Ricerche Recenti</h3>
+            <div class="history-grid">
+                <% searchHistory.forEach(search => { %>
+                <div class="history-card" onclick="viewSearchResults('<%= search.id %>')">
+                    <div class="history-query"><%= search.query %></div>
+                    <div class="history-meta">
+                        <span class="history-date"><%= new Date(search.created_at).toLocaleDateString('it-IT') %></span>
+                        <span class="history-status <%= search.status %>">
+                            <% if (search.status === 'completed') { %>
+                                ✅ Completata
+                            <% } else if (search.status === 'executing') { %>
+                                ⏳ In corso
+                            <% } else if (search.status === 'error') { %>
+                                ❌ Errore
+                            <% } else { %>
+                                📝 Pianificazione
+                            <% } %>
+                        </span>
+                    </div>
+                </div>
+                <% }) %>
+            </div>
+        </div>
+        <% } %>
         
         <div id="searchBox" class="search-box">
             <h2>Cosa vuoi analizzare?</h2>
@@ -512,6 +619,11 @@
         let keywordsList = [];
         let pagesList = [];
         let countriesList = [];
+        
+        function viewSearchResults(searchId) {
+            // Navigate to the results page for the selected search
+            window.location.href = `/api/deep-marketing/results/${searchId}?format=html`;
+        }
         
         function showStatus(message, type = 'info') {
             const statusEl = document.getElementById('statusMessage');

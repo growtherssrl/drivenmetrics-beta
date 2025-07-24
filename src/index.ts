@@ -3220,9 +3220,29 @@ app.get("/deep-marketing", async (req, res) => {
   const session = sessions.get(sessionId);
   
   try {
+    // Retrieve user's search history
+    let searchHistory = [];
+    try {
+      const { data, error } = await supabase
+        .from('deep_marketing_searches')
+        .select('id, query, status, created_at, completed_at')
+        .eq('user_id', session.user_id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (error) {
+        console.error('Error fetching search history:', error);
+      } else {
+        searchHistory = data || [];
+      }
+    } catch (historyError) {
+      console.error('Failed to fetch search history:', historyError);
+    }
+    
     res.render('deep_marketing', {
       user: session,
-      n8n_webhook_url: process.env.N8N_WEBHOOK_URL || ''
+      n8n_webhook_url: process.env.N8N_WEBHOOK_URL || '',
+      searchHistory: searchHistory
     });
   } catch (err) {
     console.error('Deep Marketing page error:', err);
