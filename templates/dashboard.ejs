@@ -299,11 +299,11 @@
         <!-- Stats Grid -->
         <section class="stats-grid">
             <div class="stat-card <%= has_claude ? 'active' : '' %>">
-                <h3>Claude.ai Status</h3>
+                <h3>Drivenmetrics Server</h3>
                 <div class="stat-value"><%= has_claude ? 'Connected' : 'Not Connected' %></div>
             </div>
             <div class="stat-card <%= has_facebook ? 'active' : '' %>">
-                <h3>Facebook Ads</h3>
+                <h3>Facebook API</h3>
                 <div class="stat-value"><%= has_facebook ? 'Connected' : 'Not Connected' %></div>
             </div>
             <div class="stat-card">
@@ -420,9 +420,9 @@
                     <div class="integration-info">
                         <div class="integration-icon">🤖</div>
                         <div>
-                            <h4>Claude.ai MCP</h4>
+                            <h4>Server Drivenmetrics</h4>
                             <p style="color: #999; font-size: 14px; margin-top: 4px;">
-                                <%= has_claude ? 'Access granted to Claude.ai' : 'Not connected to Claude.ai' %>
+                                <%= has_claude ? 'Server attivo e funzionante' : 'Server non connesso' %>
                             </p>
                         </div>
                     </div>
@@ -435,7 +435,7 @@
                     <div class="integration-info">
                         <div class="integration-icon">📘</div>
                         <div>
-                            <h4>Facebook Ads</h4>
+                            <h4>Facebook API</h4>
                             <p style="color: #999; font-size: 14px; margin-top: 4px;">
                                 <%= has_facebook ? 'Ad library access enabled' : 'Connect to access competitor ads' %>
                             </p>
@@ -451,7 +451,8 @@
     
     <!-- Footer -->
     <footer style="text-align: center; padding: 40px 20px; color: #666; font-size: 14px;">
-        Crafted with ❤️ & 🤖 by Growthers
+        <div>Beta Version 2.4</div>
+        <div style="margin-top: 8px;">Crafted with ❤️ & 🤖 by Growthers</div>
     </footer>
     
     <script>

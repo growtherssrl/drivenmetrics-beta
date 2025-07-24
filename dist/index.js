@@ -2890,9 +2890,28 @@ app.get("/deep-marketing", async (req, res) => {
         return res.redirect('/login?next=/deep-marketing');
     }
     const session = sessions.get(sessionId);
+    let searchHistory = [];
+    // Load search history
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('deep_marketing_searches')
+                .select('id, query, status, created_at, completed_at')
+                .eq('user_id', session.user_id)
+                .order('created_at', { ascending: false })
+                .limit(6); // Show last 6 searches
+            if (data) {
+                searchHistory = data;
+            }
+        }
+        catch (error) {
+            console.error('Error loading search history:', error);
+        }
+    }
     try {
         res.render('deep_marketing', {
             user: session,
+            searchHistory: searchHistory,
             n8n_webhook_url: process.env.N8N_WEBHOOK_URL || ''
         });
     }
