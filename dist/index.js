@@ -2891,7 +2891,7 @@ app.get("/deep-marketing", async (req, res) => {
     }
     const session = sessions.get(sessionId);
     let searchHistory = [];
-    // Load search history
+    // Load last 3 searches
     if (supabase) {
         try {
             const { data, error } = await supabase
@@ -2899,7 +2899,7 @@ app.get("/deep-marketing", async (req, res) => {
                 .select('id, query, status, created_at, completed_at')
                 .eq('user_id', session.user_id)
                 .order('created_at', { ascending: false })
-                .limit(6); // Show last 6 searches
+                .limit(3); // Show only last 3 searches
             if (data) {
                 searchHistory = data;
             }

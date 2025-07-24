@@ -496,7 +496,7 @@
         
         <% if (typeof searchHistory !== 'undefined' && searchHistory && searchHistory.length > 0) { %>
         <div class="search-history">
-            <h3>📋 Ricerche Recenti</h3>
+            <h3>📋 Ultime Ricerche</h3>
             <div class="history-grid">
                 <% searchHistory.forEach(search => { %>
                 <div class="history-card" onclick="viewSearchResults('<%= search.id %>')">
