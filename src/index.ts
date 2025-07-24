@@ -3220,35 +3220,68 @@ app.get("/deep-marketing", async (req, res) => {
   const session = sessions.get(sessionId);
   
   try {
-    // Retrieve user's search history
-    let searchHistory: any[] = [];
-    if (supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('deep_marketing_searches')
-          .select('id, query, status, created_at, completed_at')
-          .eq('user_id', session.user_id)
-          .order('created_at', { ascending: false })
-          .limit(10);
-        
-        if (error) {
-          console.error('Error fetching search history:', error);
-        } else {
-          searchHistory = data || [];
-        }
-      } catch (historyError) {
-        console.error('Failed to fetch search history:', historyError);
-      }
-    }
-    
     res.render('deep_marketing', {
       user: session,
-      n8n_webhook_url: process.env.N8N_WEBHOOK_URL || '',
-      searchHistory: searchHistory
+      n8n_webhook_url: process.env.N8N_WEBHOOK_URL || ''
     });
   } catch (err) {
     console.error('Deep Marketing page error:', err);
     res.status(500).send('Error loading Deep Marketing page');
+  }
+});
+
+// Deep Marketing search history
+app.get("/deep-marketing/history", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.redirect('/login?next=/deep-marketing/history');
+  }
+  
+  const session = sessions.get(sessionId);
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = 12;
+  const offset = (page - 1) * limit;
+  
+  try {
+    let searches: any[] = [];
+    let totalCount = 0;
+    
+    if (supabase) {
+      // Get total count
+      const { count } = await supabase
+        .from('deep_marketing_searches')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', session.user_id);
+      
+      totalCount = count || 0;
+      
+      // Get paginated results
+      const { data, error } = await supabase
+        .from('deep_marketing_searches')
+        .select('id, query, status, created_at, completed_at')
+        .eq('user_id', session.user_id)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
+      
+      if (error) {
+        console.error('Error fetching search history:', error);
+      } else {
+        searches = data || [];
+      }
+    }
+    
+    const totalPages = Math.ceil(totalCount / limit);
+    
+    res.render('deep_marketing_history', {
+      user: session,
+      searches: searches,
+      currentPage: page,
+      totalPages: totalPages,
+      totalCount: totalCount
+    });
+  } catch (err) {
+    console.error('Deep Marketing history error:', err);
+    res.status(500).send('Error loading search history');
   }
 });
 
@@ -3728,29 +3761,32 @@ app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
   }
   
   const { searchId } = req.params;
-  const search = activeSearches.get(searchId);
+  let search = activeSearches.get(searchId);
   
   // Check if format=html is requested
   const format = req.query.format;
   
-  if (!search) {
-    // Try to load from database
-    if (supabase) {
-      try {
-        const { data, error } = await supabase
-          .from("deep_marketing_searches")
-          .select("*")
-          .eq("id", searchId)
-          .single();
-        
-        if (data) {
-          return res.json(data);
-        }
-      } catch (dbError) {
-        console.error("Error loading search from database:", dbError);
+  // If not found in memory, try to load from database
+  if (!search && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from("deep_marketing_searches")
+        .select("*")
+        .eq("id", searchId)
+        .eq("user_id", session.user_id) // Extra security check
+        .single();
+      
+      if (error) {
+        console.error("Error loading search from database:", error);
+      } else if (data) {
+        search = data;
       }
+    } catch (dbError) {
+      console.error("Error loading search from database:", dbError);
     }
-    
+  }
+  
+  if (!search) {
     return res.status(404).json({ error: "Search not found" });
   }
   
@@ -3765,6 +3801,7 @@ app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
     });
   }
   
+  // For non-HTML format or incomplete searches
   res.json(search);
 });
 
