@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Risultati Analisi - <%= query %> | Drivenmetrics</title>
+    <title>Marketing Intelligence Report - <%= query %> | Drivenmetrics</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -391,27 +391,55 @@
         
         .content-body {
             color: var(--text-secondary);
-            font-size: 0.875rem;
+            font-size: 0.9375rem;
             line-height: 1.8;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
         }
         
-        .content-body h3,
+        .content-body h3 {
+            color: var(--text-primary);
+            margin: 2rem 0 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+        
         .content-body h4 {
             color: var(--text-primary);
-            margin: 1.5rem 0 1rem;
+            margin: 1.5rem 0 0.75rem;
+            font-size: 1.125rem;
+            font-weight: 500;
         }
         
         .content-body strong {
-            color: var(--text-primary);
+            color: var(--primary);
+            font-weight: 600;
         }
         
         .content-body ul {
             margin: 1rem 0;
             padding-left: 1.5rem;
+            list-style: none;
         }
         
         .content-body li {
-            margin: 0.5rem 0;
+            margin: 0.75rem 0;
+            position: relative;
+            padding-left: 1.5rem;
+        }
+        
+        .content-body li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--primary);
+            font-weight: bold;
+        }
+        
+        .content-body p {
+            margin: 1rem 0;
         }
         
         /* Actions */
@@ -547,7 +575,7 @@
     <div class="container">
         <!-- Hero Section -->
         <section class="hero">
-            <h1>Analisi Competitiva Facebook Ads</h1>
+            <h1>Marketing Intelligence Report</h1>
             <div class="hero-meta">
                 <div class="hero-meta-item">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -829,15 +857,22 @@
         <%
         function formatContent(text) {
             if (!text) return '';
+            
+            // Rimuovi i ## alla fine delle sezioni
+            text = text.replace(/##\s*$/gm, '');
+            
+            // Formatta il testo
             return text
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/### (.*?)\n/g, '<h3>$1</h3>')
-                .replace(/## (.*?)\n/g, '<h2>$1</h2>')
-                .replace(/- (.*?)\n/g, '<li>$1</li>')
+                .replace(/### (.*?)$/gm, '<h4>$1</h4>')
+                .replace(/## (.*?)$/gm, '<h3>$1</h3>')
+                .replace(/^- (.*?)$/gm, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>)\n(?!<li>)/g, '<ul>$1</ul>')
                 .replace(/\n\n/g, '</p><p>')
                 .replace(/\n/g, '<br>')
-                .replace(/<li>/g, '<ul><li>')
-                .replace(/<\/li><br>/g, '</li></ul>');
+                .replace(/<\/li><li>/g, '</li><li>')
+                .replace(/<ul><ul>/g, '<ul>')
+                .replace(/<\/ul><\/ul>/g, '</ul>');
         }
         %>
     </script>
