@@ -395,6 +395,40 @@
             line-height: 1.8;
             word-wrap: break-word;
             overflow-wrap: break-word;
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: 1rem;
+        }
+        
+        /* Custom scrollbar for content */
+        .content-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .content-body::-webkit-scrollbar-track {
+            background: var(--dark);
+            border-radius: 4px;
+        }
+        
+        .content-body::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        
+        .content-body::-webkit-scrollbar-thumb:hover {
+            background: var(--primary);
+        }
+        
+        /* Full report specific styling */
+        .full-report-content {
+            max-height: none;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 0.875rem;
+            background: var(--dark);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
         }
         
         .content-body h3 {
@@ -771,7 +805,7 @@
             <div id="full" class="tab-content">
                 <div class="content-card">
                     <h3>📄 Report Completo</h3>
-                    <div class="content-body"><%- formatContent(results.fullReport) %></div>
+                    <div class="full-report-content"><%- results.fullReport || 'Report non disponibile' %></div>
                 </div>
             </div>
         </section>
@@ -858,34 +892,78 @@
         function formatContent(text) {
             if (!text) return '';
             
-            // Rimuovi i ## alla fine delle sezioni
-            text = text.replace(/##\s*$/gm, '');
+            // Store original text length for debugging
+            const originalLength = text.length;
             
-            // Prima, sostituisci i titoli markdown
-            text = text
-                .replace(/^### (.*?)$/gm, '<h4>$1</h4>')
-                .replace(/^## (.*?)$/gm, '<h3>$1</h3>');
+            // Split text into lines for processing
+            let lines = text.split('\n');
+            let formattedLines = [];
+            let inList = false;
+            let listItems = [];
             
-            // Gestisci le liste
-            text = text.replace(/^- (.*?)$/gm, '<li>$1</li>');
+            for (let line of lines) {
+                line = line.trim();
+                
+                // Skip empty lines
+                if (!line) {
+                    if (inList && listItems.length > 0) {
+                        formattedLines.push('<ul>' + listItems.join('') + '</ul>');
+                        listItems = [];
+                        inList = false;
+                    }
+                    continue;
+                }
+                
+                // Headers
+                if (line.startsWith('### ')) {
+                    if (inList && listItems.length > 0) {
+                        formattedLines.push('<ul>' + listItems.join('') + '</ul>');
+                        listItems = [];
+                        inList = false;
+                    }
+                    formattedLines.push('<h4>' + line.substring(4) + '</h4>');
+                } else if (line.startsWith('## ')) {
+                    if (inList && listItems.length > 0) {
+                        formattedLines.push('<ul>' + listItems.join('') + '</ul>');
+                        listItems = [];
+                        inList = false;
+                    }
+                    formattedLines.push('<h3>' + line.substring(3) + '</h3>');
+                } else if (line.startsWith('# ')) {
+                    if (inList && listItems.length > 0) {
+                        formattedLines.push('<ul>' + listItems.join('') + '</ul>');
+                        listItems = [];
+                        inList = false;
+                    }
+                    formattedLines.push('<h2>' + line.substring(2) + '</h2>');
+                }
+                // List items
+                else if (line.startsWith('- ') || line.startsWith('* ') || line.match(/^\d+\.\s/)) {
+                    inList = true;
+                    let itemText = line.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '');
+                    // Format bold within list items
+                    itemText = itemText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    listItems.push('<li>' + itemText + '</li>');
+                }
+                // Regular paragraphs
+                else {
+                    if (inList && listItems.length > 0) {
+                        formattedLines.push('<ul>' + listItems.join('') + '</ul>');
+                        listItems = [];
+                        inList = false;
+                    }
+                    // Format bold
+                    line = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                    formattedLines.push('<p>' + line + '</p>');
+                }
+            }
             
-            // Raggruppa gli elementi della lista in <ul>
-            text = text.replace(/((?:<li>.*?<\/li>\s*)+)/g, function(match) {
-                return '<ul>' + match + '</ul>';
-            });
+            // Close any remaining list
+            if (inList && listItems.length > 0) {
+                formattedLines.push('<ul>' + listItems.join('') + '</ul>');
+            }
             
-            // Formatta grassetto
-            text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-            
-            // Gestisci i paragrafi
-            text = text
-                .split(/\n\n+/)
-                .map(para => para.trim())
-                .filter(para => para && !para.match(/^<[hul]/))
-                .map(para => '<p>' + para.replace(/\n/g, '<br>') + '</p>')
-                .join('\n');
-            
-            return text;
+            return formattedLines.join('\n');
         }
         %>
     </script>
