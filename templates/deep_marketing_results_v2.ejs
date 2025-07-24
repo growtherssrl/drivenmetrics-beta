@@ -861,18 +861,31 @@
             // Rimuovi i ## alla fine delle sezioni
             text = text.replace(/##\s*$/gm, '');
             
-            // Formatta il testo
-            return text
-                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-                .replace(/### (.*?)$/gm, '<h4>$1</h4>')
-                .replace(/## (.*?)$/gm, '<h3>$1</h3>')
-                .replace(/^- (.*?)$/gm, '<li>$1</li>')
-                .replace(/(<li>.*<\/li>)\n(?!<li>)/g, '<ul>$1</ul>')
-                .replace(/\n\n/g, '</p><p>')
-                .replace(/\n/g, '<br>')
-                .replace(/<\/li><li>/g, '</li><li>')
-                .replace(/<ul><ul>/g, '<ul>')
-                .replace(/<\/ul><\/ul>/g, '</ul>');
+            // Prima, sostituisci i titoli markdown
+            text = text
+                .replace(/^### (.*?)$/gm, '<h4>$1</h4>')
+                .replace(/^## (.*?)$/gm, '<h3>$1</h3>');
+            
+            // Gestisci le liste
+            text = text.replace(/^- (.*?)$/gm, '<li>$1</li>');
+            
+            // Raggruppa gli elementi della lista in <ul>
+            text = text.replace(/((?:<li>.*?<\/li>\s*)+)/g, function(match) {
+                return '<ul>' + match + '</ul>';
+            });
+            
+            // Formatta grassetto
+            text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Gestisci i paragrafi
+            text = text
+                .split(/\n\n+/)
+                .map(para => para.trim())
+                .filter(para => para && !para.match(/^<[hul]/))
+                .map(para => '<p>' + para.replace(/\n/g, '<br>') + '</p>')
+                .join('\n');
+            
+            return text;
         }
         %>
     </script>

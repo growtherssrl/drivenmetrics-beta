@@ -3848,6 +3848,8 @@ app.delete("/api/deep-marketing/search/:searchId", async (req, res) => {
   const session = sessions.get(sessionId);
   const { searchId } = req.params;
   
+  console.log(`[DELETE SEARCH] Attempting to delete search ${searchId} for user ${session.user_id}`);
+  
   // Initialize Supabase client with the environment variable key
   const supabase = createClient(
     process.env.SUPABASE_URL || "",
@@ -3856,15 +3858,23 @@ app.delete("/api/deep-marketing/search/:searchId", async (req, res) => {
   
   try {
     // Delete the search (RLS will ensure only the owner can delete)
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('deep_marketing_searches')
       .delete()
       .eq('id', searchId)
-      .eq('user_id', session.user_id);
+      .eq('user_id', session.user_id)
+      .select();
     
     if (error) {
       console.error("Error deleting search:", error);
       return res.status(500).json({ error: "Failed to delete search" });
+    }
+    
+    console.log(`[DELETE SEARCH] Delete result:`, data);
+    
+    if (!data || data.length === 0) {
+      console.log(`[DELETE SEARCH] No search found to delete or not authorized`);
+      return res.status(404).json({ error: "Search not found or not authorized" });
     }
     
     res.json({ success: true });
