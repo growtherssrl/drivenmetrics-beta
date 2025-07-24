@@ -51,7 +51,7 @@ const FB_APP_ID = process.env.FB_APP_ID || "";
 const FB_APP_SECRET = process.env.FB_APP_SECRET || "";
 const FB_GRAPH_VERSION = "v21.0";
 const DEFAULT_AD_COUNTRY = process.env.DEFAULT_AD_COUNTRY || "IT"; // Default country for ad searches
-// Initialize Supabase with service role key
+// Initialize Supabase with service role key and proper headers for PostgREST
 const supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_KEY, {
     auth: {
         autoRefreshToken: false,
@@ -62,7 +62,10 @@ const supabase = (0, supabase_js_1.createClient)(SUPABASE_URL, SUPABASE_KEY, {
     },
     global: {
         headers: {
-            'apikey': SUPABASE_KEY
+            'apikey': SUPABASE_KEY,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
         }
     }
 });
@@ -203,17 +206,58 @@ async function getUserByToken(token) {
     }
     try {
         console.log("[DB] Looking up token in database:", token.substring(0, 10) + "...");
+        console.log("[DB] Full token for debug:", token);
+        console.log("[DB] Token length:", token.length);
         const { data, error } = await supabase
             .from("api_tokens")
-            .select("user_id")
+            .select("user_id, expires_at, is_active")
             .eq("token", token)
             .single();
         if (error) {
-            console.error("[DB] Database error:", error);
+            // Log più dettagliato per capire meglio l'errore
+            console.error("[DB] Database error details:", {
+                code: error.code,
+                message: error.message,
+                details: error.details,
+                hint: error.hint
+            });
+            if (error.code === 'PGRST116') {
+                console.log(`[DB] Token not found in DB: ${token.substring(0, 20)}...`);
+            }
+            else if (error.message && error.message.includes('406')) {
+                console.error("[DB] ERROR 406 - Not Acceptable: Headers issue detected!");
+                console.error("[DB] This usually means missing Accept: application/json header");
+            }
+            else {
+                console.error("[DB] Database error:", error);
+            }
             return null;
         }
-        console.log("[DB] Token lookup result:", data ? "User found" : "User not found");
-        return data?.user_id || null;
+        // Check if token exists
+        if (!data) {
+            console.log("[DB] Token not found");
+            return null;
+        }
+        // Check if token is expired
+        if (data.expires_at) {
+            const expiryDate = new Date(data.expires_at);
+            const now = new Date();
+            if (expiryDate < now) {
+                console.log("[DB] Token expired:", expiryDate.toISOString());
+                // Store expiry info for better error messages
+                global.lastTokenError = 'expired';
+                return null;
+            }
+        }
+        // Check if token is active (if field exists)
+        if ('is_active' in data && !data.is_active) {
+            console.log("[DB] Token is inactive");
+            return null;
+        }
+        console.log("[DB] Token valid for user:", data.user_id);
+        // Clear any previous error state
+        delete global.lastTokenError;
+        return data.user_id;
     }
     catch (error) {
         console.error("[DB] Error getting user:", error);
@@ -221,9 +265,12 @@ async function getUserByToken(token) {
     }
 }
 async function getFacebookToken(userId) {
-    if (!supabase || !userId)
+    if (!supabase || !userId) {
+        console.log("[FB] No supabase or userId provided");
         return null;
+    }
     try {
+        console.log("[FB] Looking up Facebook token for user:", userId);
         const { data, error } = await supabase
             .from("facebook_tokens")
             .select("access_token")
@@ -231,13 +278,20 @@ async function getFacebookToken(userId) {
             .eq("service", "competition")
             .maybeSingle(); // Use maybeSingle() instead of single() to handle no rows gracefully
         if (error) {
-            console.error("Error getting FB token:", error);
+            console.error("[FB] Error getting FB token:", error);
             return null;
         }
-        return data?.access_token || null;
+        if (data?.access_token) {
+            console.log("[FB] Facebook token found for user:", userId);
+            return data.access_token;
+        }
+        else {
+            console.log("[FB] No Facebook token found for user:", userId);
+            return null;
+        }
     }
     catch (error) {
-        console.error("Exception getting FB token:", error);
+        console.error("[FB] Exception getting FB token:", error);
         return null;
     }
 }
@@ -688,6 +742,106 @@ app.get("/test-auth", async (req, res) => {
         token: token.substring(0, 10) + "..."
     });
 });
+// Debug endpoint for token issues
+app.get("/debug/token/:token", async (req, res) => {
+    const { token } = req.params;
+    if (!token || !token.startsWith("dmgt_")) {
+        return res.status(400).json({ error: "Invalid token format" });
+    }
+    try {
+        // Get full token details
+        const { data, error } = await supabase
+            .from("api_tokens")
+            .select("*")
+            .eq("token", token)
+            .single();
+        if (error) {
+            return res.json({
+                found: false,
+                error: error.message,
+                code: error.code,
+                hint: error.code === 'PGRST116' ? 'Token not found in database' : 'Database error'
+            });
+        }
+        const now = new Date();
+        const expiresAt = data.expires_at ? new Date(data.expires_at) : null;
+        const isExpired = expiresAt && expiresAt < now;
+        res.json({
+            found: true,
+            user_id: data.user_id,
+            token_type: data.token_type,
+            is_active: data.is_active,
+            expires_at: data.expires_at,
+            is_expired: isExpired,
+            created_at: data.created_at,
+            last_used: data.last_used,
+            scopes: data.scopes,
+            time_until_expiry: expiresAt ? `${Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))} days` : 'N/A'
+        });
+    }
+    catch (err) {
+        res.status(500).json({
+            error: "Unexpected error",
+            details: err instanceof Error ? err.message : "Unknown error"
+        });
+    }
+});
+// User API key regeneration endpoint
+app.get("/user/api-key/regenerate", async (req, res) => {
+    // First check if user is authenticated via session
+    const sessionId = req.cookies?.session_id;
+    if (!sessionId || !sessions.has(sessionId)) {
+        // Redirect to login if not authenticated
+        return res.redirect("/login?error=not_authenticated");
+    }
+    const session = sessions.get(sessionId);
+    const userId = session.user_id;
+    if (!userId) {
+        return res.redirect("/login?error=invalid_session");
+    }
+    try {
+        // Generate new token
+        const newToken = `dmgt_${crypto_1.default.randomBytes(32).toString('hex')}`;
+        // Deactivate old tokens
+        const { error: deactivateError } = await supabase
+            .from("api_tokens")
+            .update({ is_active: false })
+            .eq("user_id", userId)
+            .eq("is_active", true);
+        if (deactivateError) {
+            console.error("[REGENERATE] Error deactivating old tokens:", deactivateError);
+        }
+        // Insert new token
+        const tokenData = {
+            token: newToken,
+            user_id: userId,
+            token_type: 'oauth',
+            scopes: ["mcp", "facebook_ads"],
+            created_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            is_active: true,
+            metadata: {}
+        };
+        const { data, error } = await supabase
+            .from("api_tokens")
+            .insert(tokenData)
+            .select()
+            .single();
+        if (error) {
+            console.error("[REGENERATE] Error creating new token:", error);
+            return res.redirect("/dashboard?error=token_generation_failed");
+        }
+        console.log("✅ API token regenerated successfully for user:", userId);
+        // Store new token in session for display
+        session.new_api_token = newToken;
+        // Redirect back to dashboard with success
+        return res.redirect("/dashboard?success=token_regenerated");
+    }
+    catch (error) {
+        console.error("[REGENERATE] Unexpected error:", error);
+        return res.redirect("/dashboard?error=unexpected_error");
+    }
+});
 // Test OAuth flow endpoint
 app.get("/test-oauth", (req, res) => {
     res.send(`
@@ -903,6 +1057,16 @@ app.get("/mcp-api/sse", async (req, res) => {
         console.log("[SSE] Bearer token provided:", token.substring(0, 10) + "...");
         userId = await getUserByToken(token);
         if (!userId) {
+            const tokenError = global.lastTokenError;
+            if (tokenError === 'expired') {
+                console.log("[SSE] Token expired - returning error");
+                res.writeHead(401, {
+                    'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache'
+                });
+                res.end(JSON.stringify({ error: "Token expired. Please regenerate your API token from the dashboard." }));
+                return;
+            }
             console.log("[SSE] Invalid token - allowing anonymous connection");
             userId = null; // Allow connection but mark as anonymous
         }
@@ -1442,48 +1606,8 @@ app.post("/login", express_1.default.urlencoded({ extended: true }), async (req,
                 if (data?.user) {
                     userId = data.user.id;
                     isNewUser = true;
-                    // Create user in our users table
-                    try {
-                        console.log("[REGISTRATION] Creating user in users table:", { userId, email });
-                        // Prima verifica se l'utente esiste già
-                        const { data: existingUser } = await supabase
-                            .from("users")
-                            .select("user_id")
-                            .eq("user_id", userId)
-                            .maybeSingle();
-                        if (existingUser) {
-                            console.log("[REGISTRATION] User already exists in users table");
-                        }
-                        else {
-                            const { data: userData, error: userError } = await supabase
-                                .from("users")
-                                .insert({
-                                user_id: userId,
-                                email: email,
-                                created_at: new Date().toISOString(),
-                                updated_at: new Date().toISOString(),
-                                is_active: true,
-                                is_admin: false
-                            })
-                                .select();
-                            if (userError) {
-                                console.error("[REGISTRATION] Error creating user in users table:", userError);
-                                console.error("[REGISTRATION] Error details:", {
-                                    code: userError.code,
-                                    message: userError.message,
-                                    details: userError.details,
-                                    hint: userError.hint
-                                });
-                                // Don't fail registration, but log the error
-                            }
-                            else {
-                                console.log("[REGISTRATION] User created successfully in users table:", userData);
-                            }
-                        }
-                    }
-                    catch (err) {
-                        console.error("[REGISTRATION] Exception creating user:", err);
-                    }
+                    // No need to manually create in public.users - database trigger handles this automatically
+                    console.log("[REGISTRATION] User registered successfully, trigger will sync to public.users");
                 }
             }
             else {
@@ -1500,29 +1624,7 @@ app.post("/login", express_1.default.urlencoded({ extended: true }), async (req,
                 }
                 if (data?.user) {
                     userId = data.user.id;
-                    // Ensure user exists in our users table
-                    try {
-                        console.log("[LOGIN] Ensuring user exists in users table:", { userId, email });
-                        const { data: upsertData, error: upsertError } = await supabase
-                            .from("users")
-                            .upsert({
-                            user_id: userId,
-                            email: email,
-                            updated_at: new Date().toISOString()
-                        }, {
-                            onConflict: 'user_id'
-                        })
-                            .select();
-                        if (upsertError) {
-                            console.error("[LOGIN] Error upserting user:", upsertError);
-                        }
-                        else {
-                            console.log("[LOGIN] User upserted successfully:", upsertData);
-                        }
-                    }
-                    catch (err) {
-                        console.error("[LOGIN] Exception upserting user:", err);
-                    }
+                    // No need to manually sync - database trigger handles this automatically
                 }
             }
         }
@@ -2162,6 +2264,11 @@ app.get("/dashboard", async (req, res) => {
             console.log("Error fetching integration status:", error);
         }
     }
+    // Check for new token from regeneration
+    if (session.new_api_token) {
+        apiToken = session.new_api_token;
+        delete session.new_api_token; // Show it only once
+    }
     try {
         res.render('dashboard', {
             user: session,
@@ -2169,7 +2276,9 @@ app.get("/dashboard", async (req, res) => {
             has_claude: hasClaude,
             api_calls: apiCalls,
             api_token: apiToken,
-            facebook_token: facebookToken
+            facebook_token: facebookToken,
+            success: req.query.success,
+            error: req.query.error
         });
     }
     catch (err) {
@@ -2284,17 +2393,18 @@ app.post("/api/generate-token", async (req, res) => {
                     }
                 }
             }
-            // Prepare token data
+            // Prepare token data according to the database schema
             const tokenData = {
                 token: apiToken,
                 user_id: userId,
-                scopes: ["mcp"],
-                created_at: new Date().toISOString()
+                token_type: 'oauth', // Required field with default value
+                scopes: ["mcp", "facebook_ads"], // Match the default in schema
+                created_at: new Date().toISOString(),
+                // Set expiry to 30 days from now
+                expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                is_active: true,
+                metadata: {}
             };
-            // Only add is_active if we didn't get an error about the column
-            if (!deactivateError || (!deactivateError.message?.includes('column') && deactivateError.code !== '42703')) {
-                tokenData.is_active = true;
-            }
             // Insert the new token
             const { data, error } = await supabase
                 .from("api_tokens")
@@ -2643,6 +2753,35 @@ app.get("/refresh-session", async (req, res) => {
     }
     res.redirect(req.query.next || '/dashboard');
 });
+// Debug route to check token
+app.get("/debug/token/:token", async (req, res) => {
+    // Set CORS headers
+    res.header("Access-Control-Allow-Origin", req.headers.origin || "*");
+    res.header("Access-Control-Allow-Credentials", "true");
+    const { token } = req.params;
+    console.log("[DEBUG-TOKEN] Checking token:", token?.substring(0, 20) + "...");
+    if (!token) {
+        return res.json({ error: "No token provided" });
+    }
+    // Direct database check
+    try {
+        const { data, error } = await supabase
+            .from("api_tokens")
+            .select("*")
+            .eq("token", token);
+        console.log("[DEBUG-TOKEN] Query result:", { data, error });
+        res.json({
+            token: token.substring(0, 20) + "...",
+            found: data && data.length > 0,
+            count: data?.length || 0,
+            error: error,
+            data: data
+        });
+    }
+    catch (err) {
+        res.json({ error: "Database error", details: err });
+    }
+});
 // Debug route to check session
 app.get("/debug/session", (req, res) => {
     // Set CORS headers
@@ -2760,6 +2899,54 @@ app.get("/deep-marketing", async (req, res) => {
     catch (err) {
         console.error('Deep Marketing page error:', err);
         res.status(500).send('Error loading Deep Marketing page');
+    }
+});
+// Deep Marketing search history
+app.get("/deep-marketing/history", async (req, res) => {
+    const sessionId = req.cookies?.session_id;
+    if (!sessionId || !sessions.has(sessionId)) {
+        return res.redirect('/login?next=/deep-marketing/history');
+    }
+    const session = sessions.get(sessionId);
+    const page = parseInt(req.query.page) || 1;
+    const limit = 12;
+    const offset = (page - 1) * limit;
+    try {
+        let searches = [];
+        let totalCount = 0;
+        if (supabase) {
+            // Get total count
+            const { count } = await supabase
+                .from('deep_marketing_searches')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', session.user_id);
+            totalCount = count || 0;
+            // Get paginated results
+            const { data, error } = await supabase
+                .from('deep_marketing_searches')
+                .select('id, query, status, created_at, completed_at')
+                .eq('user_id', session.user_id)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1);
+            if (error) {
+                console.error('Error fetching search history:', error);
+            }
+            else {
+                searches = data || [];
+            }
+        }
+        const totalPages = Math.ceil(totalCount / limit);
+        res.render('deep_marketing_history', {
+            user: session,
+            searches: searches,
+            currentPage: page,
+            totalPages: totalPages,
+            totalCount: totalCount
+        });
+    }
+    catch (err) {
+        console.error('Deep Marketing history error:', err);
+        res.status(500).send('Error loading search history');
     }
 });
 // Store active searches
@@ -3011,6 +3198,12 @@ app.post("/api/deep-marketing/execute-search", async (req, res) => {
             mcp_endpoint: `${baseUrl}/mcp-api/sse`,
             callback_url: `${baseUrl}/api/deep-marketing/receive-results`,
             timestamp: new Date().toISOString()
+        }, {
+            timeout: 30000, // 30 seconds timeout
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
         }).catch(error => {
             console.error("Error executing search in n8n:", error);
             // Update search status on error
@@ -3172,26 +3365,44 @@ app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
         return res.status(401).json({ error: "Not authenticated" });
     }
     const { searchId } = req.params;
-    const search = activeSearches.get(searchId);
-    if (!search) {
-        // Try to load from database
-        if (supabase) {
-            try {
-                const { data, error } = await supabase
-                    .from("deep_marketing_searches")
-                    .select("*")
-                    .eq("id", searchId)
-                    .single();
-                if (data) {
-                    return res.json(data);
-                }
+    const session = sessions.get(sessionId);
+    let search = activeSearches.get(searchId);
+    // Check if format=html is requested
+    const format = req.query.format;
+    // If not found in memory, try to load from database
+    if (!search && supabase) {
+        try {
+            const { data, error } = await supabase
+                .from("deep_marketing_searches")
+                .select("*")
+                .eq("id", searchId)
+                .eq("user_id", session.user_id) // Extra security check
+                .single();
+            if (error) {
+                console.error("Error loading search from database:", error);
             }
-            catch (dbError) {
-                console.error("Error loading search from database:", dbError);
+            else if (data) {
+                search = data;
             }
         }
+        catch (dbError) {
+            console.error("Error loading search from database:", dbError);
+        }
+    }
+    if (!search) {
         return res.status(404).json({ error: "Search not found" });
     }
+    // If HTML format is requested and results are available
+    if (format === 'html' && search.status === 'completed' && search.results) {
+        const session = sessions.get(sessionId);
+        return res.render('deep_marketing_results_v2', {
+            user: session,
+            query: search.query,
+            results: search.results,
+            searchId: searchId
+        });
+    }
+    // For non-HTML format or incomplete searches
     res.json(search);
 });
 // Error handling middleware

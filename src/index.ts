@@ -3761,6 +3761,7 @@ app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
   }
   
   const { searchId } = req.params;
+  const session = sessions.get(sessionId);
   let search = activeSearches.get(searchId);
   
   // Check if format=html is requested
