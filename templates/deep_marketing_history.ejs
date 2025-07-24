@@ -192,6 +192,37 @@
             color: #0066ff;
         }
         
+        .delete-search {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff444420;
+            color: #ff4444;
+            border: 1px solid #ff444440;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            font-size: 20px;
+            line-height: 1;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+        
+        .search-card:hover .delete-search {
+            opacity: 1;
+        }
+        
+        .delete-search:hover {
+            background: #ff4444;
+            color: #fff;
+            transform: scale(1.1);
+        }
+        
         .search-duration {
             display: flex;
             align-items: center;
@@ -336,9 +367,11 @@
         <div id="searchGrid" class="search-grid">
             <% if (searches && searches.length > 0) { %>
                 <% searches.forEach(search => { %>
-                <div class="search-card <%= search.status %>" onclick="<%= search.status === 'planning' ? `viewSearchPlan('${search.id}')` : `viewSearchResults('${search.id}')` %>">
-                    <div class="search-query"><%= search.query %></div>
-                    <div class="search-meta">
+                <div class="search-card <%= search.status %>">
+                    <button class="delete-search" onclick="event.stopPropagation(); deleteSearch('<%= search.id %>')" title="Elimina ricerca">×</button>
+                    <div onclick="<%= search.status === 'planning' ? `viewSearchPlan('${search.id}')` : `viewSearchResults('${search.id}')` %>">
+                        <div class="search-query"><%= search.query %></div>
+                        <div class="search-meta">
                         <div class="search-meta-row">
                             <div class="search-date">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -375,6 +408,7 @@
                             <%= minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s` %>
                         </div>
                         <% } %>
+                    </div>
                     </div>
                 </div>
                 <% }) %>
@@ -421,6 +455,34 @@
         
         function viewSearchPlan(searchId) {
             window.location.href = `/api/deep-marketing/search/${searchId}/plan`;
+        }
+        
+        async function deleteSearch(searchId) {
+            if (!confirm('Sei sicuro di voler eliminare questa ricerca?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/deep-marketing/search/${searchId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    // Remove from local array
+                    allSearches = allSearches.filter(s => s.id !== searchId);
+                    filteredSearches = filteredSearches.filter(s => s.id !== searchId);
+                    // Reload the display
+                    displaySearches();
+                } else {
+                    alert('Errore nell\'eliminazione della ricerca');
+                }
+            } catch (error) {
+                console.error('Error deleting search:', error);
+                alert('Errore nell\'eliminazione della ricerca');
+            }
         }
         
         function filterSearches() {
@@ -514,8 +576,10 @@
                 }
                 
                 return `
-                    <div class="search-card ${search.status}" onclick="${search.status === 'planning' ? `viewSearchPlan('${search.id}')` : `viewSearchResults('${search.id}')`}">
-                        <div class="search-query">${search.query}</div>
+                    <div class="search-card ${search.status}">
+                        <button class="delete-search" onclick="event.stopPropagation(); deleteSearch('${search.id}')" title="Elimina ricerca">×</button>
+                        <div onclick="${search.status === 'planning' ? `viewSearchPlan('${search.id}')` : `viewSearchResults('${search.id}')`}">
+                            <div class="search-query">${search.query}</div>
                         <div class="search-meta">
                             <div class="search-meta-row">
                                 <div class="search-date">
@@ -532,6 +596,7 @@
                                 </span>
                             </div>
                             ${durationHtml}
+                        </div>
                         </div>
                     </div>
                 `;

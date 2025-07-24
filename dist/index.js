@@ -3460,6 +3460,7 @@ app.get("/api/deep-marketing/search/:searchId/plan", async (req, res) => {
     }
     const session = sessions.get(sessionId);
     const { searchId } = req.params;
+    console.log(`[PLAN VIEW] Loading search plan - searchId: ${searchId}, userId: ${session.user_id}`);
     // Initialize Supabase client with the environment variable key
     const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL || "", process.env.SUPABASE_ANON_KEY || "");
     let search = null;
@@ -3476,7 +3477,11 @@ app.get("/api/deep-marketing/search/:searchId/plan", async (req, res) => {
                 console.error("Error loading search from database:", error);
             }
             else if (data) {
+                console.log(`[PLAN VIEW] Search found:`, data);
                 search = data;
+            }
+            else {
+                console.log(`[PLAN VIEW] No search found for id: ${searchId}`);
             }
         }
         catch (dbError) {
@@ -3484,6 +3489,7 @@ app.get("/api/deep-marketing/search/:searchId/plan", async (req, res) => {
         }
     }
     if (!search) {
+        console.log(`[PLAN VIEW] Returning 404 - no search found`);
         return res.status(404).send(`
       <html>
         <body style="font-family: sans-serif; padding: 20px; background: #0a0a0a; color: #fff;">
