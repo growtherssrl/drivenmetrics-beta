@@ -199,7 +199,7 @@ app.set('views', templatesDir);
 app.use(express.static(publicDir));
 
 // Store auth context by session ID
-const authContext = new Map<string, { userId: string; token: string }>();
+const authContext = new Map<string, { userId: string; token: string; searchId?: string | null }>();
 
 // OAuth state storage
 const oauthStates = new Map<string, any>();
@@ -1165,12 +1165,20 @@ app.get("/mcp-api/sse", async (req, res) => {
     'user-agent': req.headers['user-agent'],
     'authorization': req.headers.authorization ? 'Bearer ***' : 'None',
     'origin': req.headers.origin || 'None',
-    'referer': req.headers.referer || 'None'
+    'referer': req.headers.referer || 'None',
+    'x-search-id': req.headers['x-search-id'] || 'None'
   });
+  console.log("[SSE] Query params:", req.query);
   
   // Get client IP for rate limiting
   const clientIP = req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown';
   const ipAddress = Array.isArray(clientIP) ? clientIP[0] : clientIP.split(',')[0].trim();
+  
+  // Extract search ID from headers or query params
+  const searchId = req.headers['x-search-id'] as string || req.query.search_id as string || null;
+  if (searchId) {
+    console.log("[SSE] Search ID provided:", searchId);
+  }
   
   // Extract auth token
   const authHeader = req.headers.authorization;
@@ -1315,8 +1323,12 @@ app.get("/mcp-api/sse", async (req, res) => {
     // Store the transport for message handling
     sseTransports.set(sessionId, transport);
     
-    // Store auth info for this transport
-    authContext.set(sessionId, { userId: userId || 'anonymous', token: authHeader?.slice(7) || '' });
+    // Store auth info for this transport including searchId if provided
+    authContext.set(sessionId, { 
+      userId: userId || 'anonymous', 
+      token: authHeader?.slice(7) || '',
+      searchId: searchId 
+    });
     
     // Track active connections
     if (userId) {
