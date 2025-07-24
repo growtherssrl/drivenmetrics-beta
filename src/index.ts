@@ -167,8 +167,9 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 const app = express();
 
 // IMPORTANT: Body parsers must come FIRST before any middleware that might read the body
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase JSON body limit to 50MB for large Deep Marketing reports
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 
 // Add request logging middleware AFTER body parsers
@@ -1430,7 +1431,7 @@ app.get("/mcp-api/sse", async (req, res) => {
 });
 
 // Handle SSE messages POST endpoint
-app.post("/mcp-api/messages", express.json(), async (req, res, next) => {
+app.post("/mcp-api/messages", express.json({ limit: '50mb' }), async (req, res, next) => {
   const sessionId = req.query.sessionId as string;
   
   if (!sessionId) {
@@ -1474,7 +1475,7 @@ app.post("/mcp-api/messages", express.json(), async (req, res, next) => {
 // IMPORTANT: Don't handle /mcp-api/messages manually - let SSE transport handle it
 
 // Mount the MCP transport handler with authentication
-app.use("/mcp-api", express.json(), async (req, res, next) => {
+app.use("/mcp-api", express.json({ limit: '50mb' }), async (req, res, next) => {
   // Skip authentication for SSE endpoints - they handle their own auth
   if ((req.path === '/sse' && req.method === 'GET') || 
       (req.path === '/messages' && req.method === 'POST')) {
