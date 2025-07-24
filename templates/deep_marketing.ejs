@@ -420,6 +420,7 @@
             padding: 1.25rem;
             cursor: pointer;
             transition: all 0.2s;
+            position: relative;
         }
         
         .history-card:hover {
@@ -473,6 +474,36 @@
             background: #0066ff20;
             color: #0066ff;
         }
+        
+        .delete-search {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff444420;
+            color: #ff4444;
+            border: 1px solid #ff444440;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+            opacity: 0;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .history-card:hover .delete-search {
+            opacity: 1;
+        }
+        
+        .delete-search:hover {
+            background: #ff4444;
+            color: #fff;
+            transform: scale(1.1);
+        }
     </style>
 </head>
 <body>
@@ -499,21 +530,24 @@
             <h3>📋 Ultime Ricerche</h3>
             <div class="history-grid">
                 <% searchHistory.forEach(search => { %>
-                <div class="history-card" onclick="viewSearchResults('<%= search.id %>')">
-                    <div class="history-query"><%= search.query %></div>
-                    <div class="history-meta">
-                        <span class="history-date"><%= new Date(search.created_at).toLocaleDateString('it-IT') %></span>
-                        <span class="history-status <%= search.status %>">
-                            <% if (search.status === 'completed') { %>
-                                ✅ Completata
-                            <% } else if (search.status === 'executing') { %>
-                                ⏳ In corso
-                            <% } else if (search.status === 'error') { %>
-                                ❌ Errore
-                            <% } else { %>
-                                📝 Pianificazione
-                            <% } %>
-                        </span>
+                <div class="history-card">
+                    <button class="delete-search" onclick="event.stopPropagation(); deleteSearch('<%= search.id %>')" title="Elimina ricerca">×</button>
+                    <div onclick="<%= search.status === 'planning' ? `viewSearchPlan('${search.id}')` : `viewSearchResults('${search.id}')` %>">
+                        <div class="history-query"><%= search.query %></div>
+                        <div class="history-meta">
+                            <span class="history-date"><%= new Date(search.created_at).toLocaleDateString('it-IT') %></span>
+                            <span class="history-status <%= search.status %>">
+                                <% if (search.status === 'completed') { %>
+                                    ✅ Completata
+                                <% } else if (search.status === 'executing') { %>
+                                    ⏳ In corso
+                                <% } else if (search.status === 'error') { %>
+                                    ❌ Errore
+                                <% } else { %>
+                                    📝 Pianificazione
+                                <% } %>
+                            </span>
+                        </div>
                     </div>
                 </div>
                 <% }) %>
@@ -629,6 +663,36 @@
         function viewSearchResults(searchId) {
             // Navigate to the results page for the selected search
             window.location.href = `/api/deep-marketing/results/${searchId}?format=html`;
+        }
+        
+        function viewSearchPlan(searchId) {
+            // Load the search plan for editing/execution
+            window.location.href = `/api/deep-marketing/search/${searchId}/plan`;
+        }
+        
+        async function deleteSearch(searchId) {
+            if (!confirm('Sei sicuro di voler eliminare questa ricerca?')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/deep-marketing/search/${searchId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    // Reload the page to refresh the list
+                    window.location.reload();
+                } else {
+                    showStatus('Errore nell\'eliminazione della ricerca', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting search:', error);
+                showStatus('Errore nell\'eliminazione della ricerca', 'error');
+            }
         }
         
         function showStatus(message, type = 'info') {
@@ -1009,6 +1073,24 @@
                 addTag('countryInput', 'country');
             }
         });
+        
+        // Handle preloaded search data
+        <% if (typeof preloadedSearch !== 'undefined' && preloadedSearch) { %>
+        window.addEventListener('DOMContentLoaded', function() {
+            currentSearchId = '<%= preloadedSearch.id %>';
+            currentPlanData = <%- JSON.stringify(preloadedSearch.plan) %>;
+            
+            // Hide search box and show plan
+            document.getElementById('searchBox').classList.add('hidden');
+            document.getElementById('searchPlan').classList.add('active');
+            
+            // Display the plan
+            displaySearchPlan(currentPlanData);
+            
+            // Show status message
+            showStatus('Piano di ricerca caricato. Puoi modificarlo o avviare la ricerca.', 'info');
+        });
+        <% } %>
     </script>
 </body>
 </html>

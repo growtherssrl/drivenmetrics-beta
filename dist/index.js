@@ -3424,6 +3424,88 @@ app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
     // For non-HTML format or incomplete searches
     res.json(search);
 });
+// Delete search endpoint
+app.delete("/api/deep-marketing/search/:searchId", async (req, res) => {
+    const sessionId = req.cookies?.session_id;
+    if (!sessionId || !sessions.has(sessionId)) {
+        return res.status(401).json({ error: "Not authenticated" });
+    }
+    const session = sessions.get(sessionId);
+    const { searchId } = req.params;
+    // Initialize Supabase client with the environment variable key
+    const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL || "", process.env.SUPABASE_ANON_KEY || "");
+    try {
+        // Delete the search (RLS will ensure only the owner can delete)
+        const { error } = await supabase
+            .from('deep_marketing_searches')
+            .delete()
+            .eq('id', searchId)
+            .eq('user_id', session.user_id);
+        if (error) {
+            console.error("Error deleting search:", error);
+            return res.status(500).json({ error: "Failed to delete search" });
+        }
+        res.json({ success: true });
+    }
+    catch (error) {
+        console.error("Error deleting search:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+// Get search plan for editing/viewing
+app.get("/api/deep-marketing/search/:searchId/plan", async (req, res) => {
+    const sessionId = req.cookies?.session_id;
+    if (!sessionId || !sessions.has(sessionId)) {
+        return res.redirect(`/login?redirect=/api/deep-marketing/search/${req.params.searchId}/plan`);
+    }
+    const session = sessions.get(sessionId);
+    const { searchId } = req.params;
+    // Initialize Supabase client with the environment variable key
+    const supabase = (0, supabase_js_1.createClient)(process.env.SUPABASE_URL || "", process.env.SUPABASE_ANON_KEY || "");
+    let search = null;
+    // Try to load from database
+    if (supabase) {
+        try {
+            const { data, error } = await supabase
+                .from('deep_marketing_searches')
+                .select('*')
+                .eq('id', searchId)
+                .eq('user_id', session.user_id)
+                .single();
+            if (error) {
+                console.error("Error loading search from database:", error);
+            }
+            else if (data) {
+                search = data;
+            }
+        }
+        catch (dbError) {
+            console.error("Error loading search from database:", dbError);
+        }
+    }
+    if (!search) {
+        return res.status(404).send(`
+      <html>
+        <body style="font-family: sans-serif; padding: 20px; background: #0a0a0a; color: #fff;">
+          <h1>Search Not Found</h1>
+          <p>The search you're looking for doesn't exist or you don't have access to it.</p>
+          <a href="/deep-marketing" style="color: #0066ff;">← Back to Deep Marketing</a>
+        </body>
+      </html>
+    `);
+    }
+    // Render the deep marketing template with the search data preloaded
+    res.render('deep_marketing', {
+        user: session,
+        searchHistory: [],
+        preloadedSearch: {
+            id: search.id,
+            query: search.query,
+            plan: search.plan,
+            status: search.status
+        }
+    });
+});
 // Error handling middleware
 app.use((err, req, res, next) => {
     console.error('Error:', err);

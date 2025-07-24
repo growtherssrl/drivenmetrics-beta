@@ -336,7 +336,7 @@
         <div id="searchGrid" class="search-grid">
             <% if (searches && searches.length > 0) { %>
                 <% searches.forEach(search => { %>
-                <div class="search-card <%= search.status %>" onclick="viewSearchResults('<%= search.id %>')">
+                <div class="search-card <%= search.status %>" onclick="<%= search.status === 'planning' ? `viewSearchPlan('${search.id}')` : `viewSearchResults('${search.id}')` %>">
                     <div class="search-query"><%= search.query %></div>
                     <div class="search-meta">
                         <div class="search-meta-row">
@@ -417,6 +417,10 @@
         
         function viewSearchResults(searchId) {
             window.location.href = `/api/deep-marketing/results/${searchId}?format=html`;
+        }
+        
+        function viewSearchPlan(searchId) {
+            window.location.href = `/api/deep-marketing/search/${searchId}/plan`;
         }
         
         function filterSearches() {
@@ -510,7 +514,7 @@
                 }
                 
                 return `
-                    <div class="search-card ${search.status}" onclick="viewSearchResults('${search.id}')">
+                    <div class="search-card ${search.status}" onclick="${search.status === 'planning' ? `viewSearchPlan('${search.id}')` : `viewSearchResults('${search.id}')`}">
                         <div class="search-query">${search.query}</div>
                         <div class="search-meta">
                             <div class="search-meta-row">
