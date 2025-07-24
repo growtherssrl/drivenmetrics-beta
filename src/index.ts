@@ -3515,6 +3515,12 @@ app.post("/api/deep-marketing/execute-search", async (req, res) => {
       mcp_endpoint: `${baseUrl}/mcp-api/sse`,
       callback_url: `${baseUrl}/api/deep-marketing/receive-results`,
       timestamp: new Date().toISOString()
+    }, {
+      timeout: 30000, // 30 seconds timeout
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
     }).catch(error => {
       console.error("Error executing search in n8n:", error);
       // Update search status on error
