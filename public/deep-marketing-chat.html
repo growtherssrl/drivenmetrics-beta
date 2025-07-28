@@ -504,13 +504,13 @@
         
         // Dashboard data
         let dashboardData = {
-            adsCount: 0,
-            brandsCount: 0,
-            queriesCount: 0
-        };
+                adsCount: 0,
+                brandsCount: 0,
+                queriesCount: 0
+            };
 
-        // WebSocket event listeners
-        socket.on('dashboard-update', (data) => {
+            // WebSocket event listeners
+            socket.on('dashboard-update', (data) => {
             console.log('Dashboard update received:', data);
             handleDashboardUpdate(data);
         });
@@ -712,6 +712,30 @@
         function viewDetails(id) {
             console.log('View details for:', id);
         }
+
+        
+        // Check for initial message from homepage when page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            const initialMessage = sessionStorage.getItem('initialMessage');
+            if (initialMessage) {
+                sessionStorage.removeItem('initialMessage');
+                // Auto-send the message after a short delay
+                setTimeout(() => {
+                    document.getElementById('chatInput').value = initialMessage;
+                    sendMessage();
+                }, 500);
+            }
+
+            // Check for pending message after login
+            const pendingMessage = sessionStorage.getItem('pendingMessage');
+            if (pendingMessage) {
+                sessionStorage.removeItem('pendingMessage');
+                setTimeout(() => {
+                    document.getElementById('chatInput').value = pendingMessage;
+                    sendMessage();
+                }, 500);
+            }
+        });
     </script>
 </body>
 </html>

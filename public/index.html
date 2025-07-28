@@ -229,57 +229,32 @@
         </div>
     </main>
 
-    <script type="module">
-        import { createChat } from 'https://cdn.jsdelivr.net/npm/@n8n/chat/dist/chat.bundle.es.js';
-        
-        // Initialize n8n chat
-        const chat = createChat({
-            webhookUrl: 'https://n8n.growthers.io/webhook/0928c743-c889-4cea-833a-5cae9fe27bf9/chat',
-            mode: 'window',
-            chatInputKey: 'chatInput',
-            chatSessionKey: 'chatSession',
-            metadata: {},
-            showWelcomeScreen: false,
-            defaultLanguage: 'en',
-            initialMessages: [
-                {
-                    role: 'assistant',
-                    content: 'Ciao! Sono DrivenMetrics AI. Posso aiutarti a creare dashboard e analisi marketing. Come posso aiutarti oggi?'
-                }
-            ],
-            i18n: {
-                en: {
-                    title: 'DrivenMetrics Chat',
-                    subtitle: 'Powered by AI',
-                    footer: '',
-                    getStarted: 'Inizia',
-                    inputPlaceholder: 'Scrivi un messaggio...'
-                }
-            }
-        });
-
+    <script>
         // Custom input handling
         const mainInput = document.getElementById('mainChatInput');
         const sendButton = document.getElementById('sendButton');
 
-        function sendMessage() {
+        function handleInputSubmit() {
             const message = mainInput.value.trim();
-            if (message) {
-                // Open n8n chat and send message
-                if (window.n8nChat) {
-                    window.n8nChat.open();
-                    window.n8nChat.sendMessage(message);
-                }
-                mainInput.value = '';
-            }
+            if (!message) return;
+
+            // Save message to session storage
+            sessionStorage.setItem('initialMessage', message);
+            // Redirect to chat page
+            window.location.href = '/deep-marketing-chat.html';
         }
 
-        sendButton.addEventListener('click', sendMessage);
+        sendButton.addEventListener('click', handleInputSubmit);
         mainInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                sendMessage();
+                handleInputSubmit();
             }
         });
+
+        // Handle "Get started" button - direct to chat
+        document.querySelector('.btn-start').onclick = function() {
+            window.location.href = '/deep-marketing-chat.html';
+        };
     </script>
 </body>
 </html>
