@@ -1,4 +1,5 @@
 import express from "express";
+import { createServer } from "http";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -3999,12 +4000,20 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   `);
 });
 
+// Create HTTP server
+const httpServer = createServer(app);
+
+// Setup Socket.IO
+import { setupSocketIO } from "./socket-setup.js";
+setupSocketIO(app, httpServer);
+
 // Start server
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`🚀 MCP Server running on port ${PORT}`);
   console.log(`📡 MCP HTTP endpoint: http://localhost:${PORT}/mcp-api`);
   console.log(`📡 MCP SSE endpoint: http://localhost:${PORT}/mcp-api/sse`);
   console.log(`🔐 OAuth server: ${baseUrl}`);
   console.log(`📁 Template directory: ${templatesDir}`);
+  console.log(`🌐 Socket.IO enabled for real-time updates`);
   console.log(`✅ Ready for Claude.ai and n8n connections!`);
 });

@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const http_1 = require("http");
 const index_js_1 = require("@modelcontextprotocol/sdk/server/index.js");
 const streamableHttp_js_1 = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 const sse_js_1 = require("@modelcontextprotocol/sdk/server/sse.js");
@@ -156,8 +157,9 @@ else {
 // Express app
 const app = (0, express_1.default)();
 // IMPORTANT: Body parsers must come FIRST before any middleware that might read the body
-app.use(express_1.default.json());
-app.use(express_1.default.urlencoded({ extended: true }));
+// Increase JSON body limit to 50MB for large Deep Marketing reports
+app.use(express_1.default.json({ limit: '50mb' }));
+app.use(express_1.default.urlencoded({ extended: true, limit: '50mb' }));
 app.use((0, cookie_parser_1.default)());
 // Add request logging middleware AFTER body parsers
 app.use((req, res, next) => {
@@ -1286,7 +1288,7 @@ app.get("/mcp-api/sse", async (req, res) => {
     }
 });
 // Handle SSE messages POST endpoint
-app.post("/mcp-api/messages", express_1.default.json(), async (req, res, next) => {
+app.post("/mcp-api/messages", express_1.default.json({ limit: '50mb' }), async (req, res, next) => {
     const sessionId = req.query.sessionId;
     if (!sessionId) {
         console.error("[SSE] No session ID in messages request");
@@ -1325,7 +1327,7 @@ app.post("/mcp-api/messages", express_1.default.json(), async (req, res, next) =
 });
 // IMPORTANT: Don't handle /mcp-api/messages manually - let SSE transport handle it
 // Mount the MCP transport handler with authentication
-app.use("/mcp-api", express_1.default.json(), async (req, res, next) => {
+app.use("/mcp-api", express_1.default.json({ limit: '50mb' }), async (req, res, next) => {
     // Skip authentication for SSE endpoints - they handle their own auth
     if ((req.path === '/sse' && req.method === 'GET') ||
         (req.path === '/messages' && req.method === 'POST')) {
@@ -3578,12 +3580,18 @@ app.use((err, req, res, next) => {
     </html>
   `);
 });
+// Create HTTP server
+const httpServer = (0, http_1.createServer)(app);
+// Setup Socket.IO
+const socket_setup_js_1 = require("./socket-setup.js");
+(0, socket_setup_js_1.setupSocketIO)(app, httpServer);
 // Start server
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
     console.log(`🚀 MCP Server running on port ${PORT}`);
     console.log(`📡 MCP HTTP endpoint: http://localhost:${PORT}/mcp-api`);
     console.log(`📡 MCP SSE endpoint: http://localhost:${PORT}/mcp-api/sse`);
     console.log(`🔐 OAuth server: ${baseUrl}`);
     console.log(`📁 Template directory: ${templatesDir}`);
+    console.log(`🌐 Socket.IO enabled for real-time updates`);
     console.log(`✅ Ready for Claude.ai and n8n connections!`);
 });
