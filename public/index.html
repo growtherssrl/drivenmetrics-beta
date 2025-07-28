@@ -14,6 +14,7 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background: #0a0a0a;
+            background-image: linear-gradient(135deg, rgba(0, 102, 255, 0.05) 0%, rgba(0, 255, 136, 0.05) 100%);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -193,15 +194,13 @@
     <header class="header">
         <img src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" alt="DrivenMetrics" class="logo">
         <nav>
-            <a href="#community">Community</a>
-            <a href="#pricing">Pricing</a>
-            <a href="#enterprise">Enterprise</a>
-            <a href="#learn">Learn</a>
-            <a href="#launched">Launched</a>
+            <a href="/deep-marketing-chat.html">Deep Marketing</a>
+            <a href="/dashboard">Dashboard</a>
+            <a href="/settings">Impostazioni</a>
         </nav>
         <div class="auth-buttons">
-            <button class="btn btn-login">Log in</button>
-            <button class="btn btn-start">Get started</button>
+            <button class="btn btn-login" onclick="window.location.href='/login'">Accedi</button>
+            <button class="btn btn-start" onclick="window.location.href='/deep-marketing-chat.html'">Inizia</button>
         </div>
     </header>
 
