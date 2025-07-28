@@ -805,6 +805,21 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", service: "drivenmetrics-mcp" });
 });
 
+// Test endpoint for n8n debugging
+app.post("/test-n8n", async (req, res) => {
+  console.log("[TEST-N8N] Request received");
+  console.log("[TEST-N8N] Headers:", req.headers);
+  console.log("[TEST-N8N] Body:", req.body);
+  
+  // Simple echo response
+  res.json({
+    success: true,
+    message: "Test endpoint working",
+    received: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Test authentication endpoint
 app.get("/test-auth", async (req, res) => {
   const authHeader = req.headers.authorization;
