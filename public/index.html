@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DrivenMetrics - Build something amazing</title>
-    <link href="https://cdn.jsdelivr.net/npm/@n8n/chat/dist/style.css" rel="stylesheet" />
+    <title>DrivenMetrics - Marketing Intelligence Platform</title>
     <style>
         * {
             margin: 0;
@@ -14,11 +13,11 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #f5576c 75%, #fda085 100%);
+            background: #0a0a0a;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            color: white;
+            color: #fff;
         }
 
         .header {
@@ -26,21 +25,12 @@
             justify-content: space-between;
             align-items: center;
             padding: 1.5rem 3rem;
-            background: rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(10px);
+            background: #1a1a1a;
+            border-bottom: 1px solid #333;
         }
 
         .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .logo::before {
-            content: "📊";
-            font-size: 1.8rem;
+            height: 32px;
         }
 
         nav {
@@ -50,14 +40,14 @@
         }
 
         nav a {
-            color: white;
+            color: #999;
             text-decoration: none;
             font-weight: 500;
-            transition: opacity 0.3s;
+            transition: color 0.2s;
         }
 
         nav a:hover {
-            opacity: 0.8;
+            color: #fff;
         }
 
         .auth-buttons {
@@ -71,23 +61,31 @@
             border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.2s;
         }
 
         .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateY(-1px);
         }
 
         .btn-login {
             background: transparent;
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: #999;
+            border: 1px solid #333;
+        }
+
+        .btn-login:hover {
+            color: #fff;
+            border-color: #666;
         }
 
         .btn-start {
-            background: white;
-            color: #667eea;
+            background: #0066ff;
+            color: #fff;
+        }
+
+        .btn-start:hover {
+            background: #0052cc;
         }
 
         .main-content {
@@ -108,18 +106,17 @@
 
         .subtitle {
             font-size: 1.3rem;
-            opacity: 0.9;
+            color: #999;
             margin-bottom: 3rem;
         }
 
         .chat-container {
-            background: rgba(30, 30, 30, 0.95);
-            backdrop-filter: blur(20px);
-            border-radius: 16px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 12px;
             padding: 1.5rem;
             width: 100%;
             max-width: 700px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
             min-height: 60px;
             display: flex;
             align-items: center;
@@ -138,7 +135,7 @@
         }
 
         .chat-input::placeholder {
-            color: rgba(255, 255, 255, 0.5);
+            color: #666;
         }
 
         .chat-actions {
@@ -147,9 +144,9 @@
         }
 
         .action-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
+            background: #0a0a0a;
+            border: 1px solid #333;
+            color: #999;
             padding: 0.4rem 0.8rem;
             border-radius: 6px;
             font-size: 0.9rem;
@@ -157,29 +154,30 @@
             display: flex;
             align-items: center;
             gap: 0.3rem;
-            transition: background 0.3s;
+            transition: all 0.2s;
         }
 
         .action-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            border-color: #666;
         }
 
         .send-btn {
-            background: rgba(255, 255, 255, 0.2);
+            background: #0066ff;
             border: none;
             color: white;
             width: 40px;
             height: 40px;
-            border-radius: 50%;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: background 0.3s;
+            transition: background 0.2s;
         }
 
         .send-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: #0052cc;
         }
 
         /* Override n8n chat styles */
@@ -193,7 +191,7 @@
 </head>
 <body>
     <header class="header">
-        <div class="logo">DrivenMetrics</div>
+        <img src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" alt="DrivenMetrics" class="logo">
         <nav>
             <a href="#community">Community</a>
             <a href="#pricing">Pricing</a>
@@ -208,14 +206,14 @@
     </header>
 
     <main class="main-content">
-        <h1>Build something 📊 Amazing</h1>
-        <p class="subtitle">Create marketing analytics dashboards by chatting with AI</p>
+        <h1>Marketing Intelligence Platform</h1>
+        <p class="subtitle">Analizza campagne pubblicitarie e competitor con l'intelligenza artificiale</p>
         
         <div class="chat-container">
             <input 
                 type="text" 
                 class="chat-input" 
-                placeholder="Ask DrivenMetrics to create a dashboard..."
+                placeholder="Analizza le campagne Nike degli ultimi 30 giorni..."
                 id="mainChatInput"
             >
             <div class="chat-actions">
