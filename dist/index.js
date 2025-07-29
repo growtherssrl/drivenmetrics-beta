@@ -3442,6 +3442,54 @@ app.post("/api/deep-marketing/receive-results", async (req, res) => {
         search_id: search_id
     });
 });
+// Get user info from token (alternative for n8n)
+app.post("/api/token/info", async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({
+            error: "Authorization header required"
+        });
+    }
+    const token = authHeader.substring(7);
+    if (!supabase) {
+        return res.status(503).json({
+            error: "Database not configured"
+        });
+    }
+    try {
+        // Get token info
+        const { data: tokenData, error } = await supabase
+            .from("api_tokens")
+            .select("user_id, scopes, is_active")
+            .eq("token", token)
+            .eq("is_active", true)
+            .single();
+        if (error || !tokenData) {
+            return res.status(401).json({
+                error: "Invalid or expired token"
+            });
+        }
+        // Get user info
+        const { data: userData } = await supabase
+            .from("users")
+            .select("email, is_admin")
+            .eq("user_id", tokenData.user_id)
+            .single();
+        res.json({
+            success: true,
+            userId: tokenData.user_id,
+            email: userData?.email || null,
+            isAdmin: userData?.is_admin || false,
+            scopes: tokenData.scopes
+        });
+    }
+    catch (error) {
+        console.error("Error in /api/token/info:", error);
+        res.status(500).json({
+            error: "Internal server error"
+        });
+    }
+});
 // Session to user ID lookup endpoint for n8n
 app.post("/api/session/lookup", async (req, res) => {
     const { sessionId, includeServiceToken } = req.body;
