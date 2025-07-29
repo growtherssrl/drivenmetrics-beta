@@ -1921,8 +1921,9 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
   
   // Set session cookie
   res.cookie('session_id', sessionId, {
-    httpOnly: true,
+    httpOnly: false, // Allow JavaScript access for chat integration
     secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict', // Prevent CSRF
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   });
   
