@@ -3493,6 +3493,8 @@ app.post("/api/token/info", async (req, res) => {
 // Session to user ID lookup endpoint for n8n
 app.post("/api/session/lookup", async (req, res) => {
     const { sessionId, includeServiceToken } = req.body;
+    console.log("[SESSION-LOOKUP] Request received:", { sessionId, includeServiceToken });
+    console.log("[SESSION-LOOKUP] Active sessions:", Array.from(sessions.keys()));
     if (!sessionId) {
         return res.status(400).json({
             error: "sessionId is required"
@@ -3500,9 +3502,11 @@ app.post("/api/session/lookup", async (req, res) => {
     }
     // Check if session exists
     if (!sessions.has(sessionId)) {
+        console.log("[SESSION-LOOKUP] Session not found:", sessionId);
         return res.status(404).json({
             error: "Session not found",
-            sessionId: sessionId
+            sessionId: sessionId,
+            activeSessions: Array.from(sessions.keys()).length
         });
     }
     const session = sessions.get(sessionId);
@@ -3529,6 +3533,17 @@ app.post("/api/session/lookup", async (req, res) => {
         }
     }
     res.json(response);
+});
+// Debug endpoint to check current session
+app.get("/api/session/current", async (req, res) => {
+    const sessionId = req.cookies?.session_id;
+    res.json({
+        cookieSessionId: sessionId || null,
+        hasCookie: !!sessionId,
+        sessionExists: sessionId ? sessions.has(sessionId) : false,
+        activeSessions: Array.from(sessions.keys()).length,
+        userAgent: req.headers['user-agent']
+    });
 });
 // Get search results
 app.get("/api/deep-marketing/results/:searchId", async (req, res) => {
