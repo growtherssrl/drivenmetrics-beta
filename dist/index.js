@@ -2940,6 +2940,13 @@ async function getWebhookUrl(serviceName) {
         return null;
     }
 }
+// Force reload of chat page
+app.get("/deep-marketing-chat.html", (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(path_1.default.join(__dirname, '../public/deep-marketing-chat.html'));
+});
 // Deep Marketing routes
 app.get("/deep-marketing", async (req, res) => {
     const sessionId = req.cookies?.session_id;

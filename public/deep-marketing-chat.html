@@ -511,12 +511,18 @@
         const serverSessionId = getCookie('session_id');
         const sessionId = serverSessionId || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        console.log('Chat using sessionId:', sessionId, 'From server cookie:', !!serverSessionId);
+        console.log('=== CHAT SESSION DEBUG ===');
+        console.log('Server sessionId from cookie:', serverSessionId);
+        console.log('Final sessionId being used:', sessionId);
+        console.log('From server cookie:', !!serverSessionId);
         console.log('All cookies:', document.cookie);
+        console.log('Page loaded at:', new Date().toISOString());
+        console.log('========================');
         
         // If no session cookie found, alert the user
         if (!serverSessionId) {
-            console.warn('No session_id cookie found! User might not be authenticated properly.');
+            console.error('❌ No session_id cookie found! User might not be authenticated properly.');
+            console.error('Please make sure you are logged in at /login');
         }
         
         // Join session room
