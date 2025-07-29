@@ -495,9 +495,22 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        // Function to get cookie value
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+        
         // Initialize WebSocket connection
         const socket = io();
-        const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Get session ID from cookie (this is the authenticated session)
+        const serverSessionId = getCookie('session_id');
+        const sessionId = serverSessionId || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        console.log('Chat using sessionId:', sessionId, 'From server cookie:', !!serverSessionId);
         
         // Join session room
         socket.emit('join-session', sessionId);
