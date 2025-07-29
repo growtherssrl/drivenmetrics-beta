@@ -491,10 +491,26 @@ mcpServer.setRequestHandler(types_js_1.CallToolRequestSchema, async (request, ex
         auth = authContext.get(sessionId);
     }
     console.log("[TOOL] Auth found:", auth ? { userId: auth.userId, hasToken: !!auth.token } : "No auth");
-    const userId = auth?.userId || null;
+    let userId = auth?.userId || null;
+    // Check if this is a service token with on_behalf_of parameter
+    if (args?.on_behalf_of_user_id && auth?.token) {
+        // Verify if this is a service token by checking scopes
+        const { data: tokenData } = await supabase
+            .from("api_tokens")
+            .select("scopes")
+            .eq("token", auth.token)
+            .single();
+        if (tokenData?.scopes?.includes("service") || tokenData?.scopes?.includes("admin")) {
+            console.log("[TOOL] Service token detected, acting on behalf of user:", args.on_behalf_of_user_id);
+            userId = String(args.on_behalf_of_user_id);
+        }
+        else {
+            console.log("[TOOL] Token does not have service scope, using authenticated user");
+        }
+    }
     // Get user's Facebook token if available
     const fbToken = userId ? await getFacebookToken(userId) : null;
-    console.log("[TOOL] Tool execution context:", { userId, hasFbToken: !!fbToken });
+    console.log("[TOOL] Tool execution context:", { userId, hasFbToken: !!fbToken, serviceMode: !!args?.on_behalf_of_user_id });
     try {
         let result;
         switch (name) {
@@ -2849,14 +2865,27 @@ app.get("/admin/webhooks", async (req, res) => {
     }
     try {
         let webhooks = [];
+        let serviceTokens = [];
         if (supabase) {
-            const { data, error } = await supabase
+            // Fetch webhooks
+            const { data: webhookData, error: webhookError } = await supabase
                 .from("webhook_config")
                 .select("*")
                 .order("service_name");
-            if (data) {
-                webhooks = data;
+            if (webhookData) {
+                webhooks = webhookData;
             }
+            // Fetch service tokens (tokens with service scope)
+            const { data: tokenData, error: tokenError } = await supabase
+                .from("api_tokens")
+                .select("*")
+                .contains('scopes', ['service'])
+                .eq('is_active', true)
+                .order('created_at', { ascending: false });
+            if (tokenData) {
+                serviceTokens = tokenData;
+            }
+            console.log("[ADMIN] Found service tokens:", serviceTokens.length);
         }
         else {
             // Default webhooks for demo
@@ -2877,7 +2906,8 @@ app.get("/admin/webhooks", async (req, res) => {
         }
         res.render('admin_webhooks', {
             user: session,
-            webhooks: webhooks
+            webhooks: webhooks,
+            serviceTokens: serviceTokens
         });
     }
     catch (err) {
@@ -3283,17 +3313,25 @@ app.post("/api/mcp/execute-tool", async (req, res) => {
         // Get user from token
         const { data: tokenData, error: tokenError } = await supabase
             .from("api_tokens")
-            .select("user_id")
+            .select("user_id, scopes")
             .eq("token", auth_token)
             .single();
         if (tokenError || !tokenData) {
             return res.status(401).json({ error: "Invalid auth token" });
         }
-        // Get Facebook token for user
+        // Determine which user to act on behalf of
+        let targetUserId = tokenData.user_id;
+        // Check if this is a service token with on_behalf_of parameter
+        if (toolArgs?.on_behalf_of_user_id &&
+            (tokenData.scopes?.includes("service") || tokenData.scopes?.includes("admin"))) {
+            console.log(`[MCP_API] Service token acting on behalf of user: ${toolArgs.on_behalf_of_user_id}`);
+            targetUserId = toolArgs.on_behalf_of_user_id;
+        }
+        // Get Facebook token for target user
         const { data: fbTokenData } = await supabase
             .from("facebook_tokens")
             .select("access_token")
-            .eq("user_id", tokenData.user_id)
+            .eq("user_id", targetUserId)
             .eq("service", "competition")
             .single();
         const fbToken = fbTokenData?.access_token || null;
@@ -3403,6 +3441,46 @@ app.post("/api/deep-marketing/receive-results", async (req, res) => {
         message: "Results received",
         search_id: search_id
     });
+});
+// Session to user ID lookup endpoint for n8n
+app.post("/api/session/lookup", async (req, res) => {
+    const { sessionId, includeServiceToken } = req.body;
+    if (!sessionId) {
+        return res.status(400).json({
+            error: "sessionId is required"
+        });
+    }
+    // Check if session exists
+    if (!sessions.has(sessionId)) {
+        return res.status(404).json({
+            error: "Session not found",
+            sessionId: sessionId
+        });
+    }
+    const session = sessions.get(sessionId);
+    const response = {
+        success: true,
+        sessionId: sessionId,
+        userId: session.user_id,
+        email: session.email,
+        isAdmin: session.is_admin || false
+    };
+    // Get user's API token if requested
+    if (includeServiceToken && supabase) {
+        // Get the user's active API token
+        const { data: tokenData } = await supabase
+            .from("api_tokens")
+            .select("token")
+            .eq('user_id', session.user_id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+        if (tokenData) {
+            response.userToken = tokenData.token;
+        }
+    }
+    res.json(response);
 });
 // Get search results
 app.get("/api/deep-marketing/results/:searchId", async (req, res) => {

@@ -556,7 +556,7 @@ mcpServer.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
     
     if (tokenData?.scopes?.includes("service") || tokenData?.scopes?.includes("admin")) {
       console.log("[TOOL] Service token detected, acting on behalf of user:", args.on_behalf_of_user_id);
-      userId = args.on_behalf_of_user_id;
+      userId = String(args.on_behalf_of_user_id);
     } else {
       console.log("[TOOL] Token does not have service scope, using authenticated user");
     }
@@ -3193,16 +3193,32 @@ app.get("/admin/webhooks", async (req, res) => {
   
   try {
     let webhooks = [];
+    let serviceTokens = [];
     
     if (supabase) {
-      const { data, error } = await supabase
+      // Fetch webhooks
+      const { data: webhookData, error: webhookError } = await supabase
         .from("webhook_config")
         .select("*")
         .order("service_name");
       
-      if (data) {
-        webhooks = data;
+      if (webhookData) {
+        webhooks = webhookData;
       }
+      
+      // Fetch service tokens (tokens with service scope)
+      const { data: tokenData, error: tokenError } = await supabase
+        .from("api_tokens")
+        .select("*")
+        .contains('scopes', ['service'])
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+      
+      if (tokenData) {
+        serviceTokens = tokenData;
+      }
+      
+      console.log("[ADMIN] Found service tokens:", serviceTokens.length);
     } else {
       // Default webhooks for demo
       webhooks = [
@@ -3223,7 +3239,8 @@ app.get("/admin/webhooks", async (req, res) => {
     
     res.render('admin_webhooks', {
       user: session,
-      webhooks: webhooks
+      webhooks: webhooks,
+      serviceTokens: serviceTokens
     });
   } catch (err) {
     console.error('Admin webhooks page error:', err);
@@ -3831,6 +3848,54 @@ app.post("/api/deep-marketing/receive-results", async (req, res) => {
     message: "Results received",
     search_id: search_id 
   });
+});
+
+// Session to user ID lookup endpoint for n8n
+app.post("/api/session/lookup", async (req, res) => {
+  const { sessionId, includeServiceToken } = req.body;
+  
+  if (!sessionId) {
+    return res.status(400).json({
+      error: "sessionId is required"
+    });
+  }
+  
+  // Check if session exists
+  if (!sessions.has(sessionId)) {
+    return res.status(404).json({
+      error: "Session not found",
+      sessionId: sessionId
+    });
+  }
+  
+  const session = sessions.get(sessionId);
+  
+  const response: any = {
+    success: true,
+    sessionId: sessionId,
+    userId: session.user_id,
+    email: session.email,
+    isAdmin: session.is_admin || false
+  };
+  
+  // Get user's API token if requested
+  if (includeServiceToken && supabase) {
+    // Get the user's active API token
+    const { data: tokenData } = await supabase
+      .from("api_tokens")
+      .select("token")
+      .eq('user_id', session.user_id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (tokenData) {
+      response.userToken = tokenData.token;
+    }
+  }
+  
+  res.json(response);
 });
 
 // Get search results

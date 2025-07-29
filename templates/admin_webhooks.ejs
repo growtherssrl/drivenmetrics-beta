@@ -306,6 +306,46 @@
             <% }); %>
         </div>
         
+        <% if (serviceTokens && serviceTokens.length > 0) { %>
+        <div class="webhook-card" style="margin-top: 2rem; background: #1a5490; border-color: #2563eb;">
+            <div class="webhook-header">
+                <div>
+                    <h3 class="webhook-title">🔑 Service Token for n8n</h3>
+                    <p class="webhook-description">Use this token to allow n8n to act on behalf of any user</p>
+                </div>
+                <span class="webhook-status active">Active</span>
+            </div>
+            
+            <% serviceTokens.forEach((token, index) => { %>
+            <div class="webhook-url-group" style="margin-top: <%= index > 0 ? '1rem' : '0' %>;">
+                <div class="webhook-url-label">Service Token <%= serviceTokens.length > 1 ? (index + 1) : '' %></div>
+                <input 
+                    type="text" 
+                    class="webhook-url-input" 
+                    value="<%= token.token %>"
+                    readonly
+                    onclick="this.select()"
+                    style="cursor: pointer; font-family: monospace;"
+                >
+                <div style="margin-top: 0.5rem; color: #999; font-size: 0.85rem;">
+                    Created: <%= new Date(token.created_at).toLocaleDateString() %> | 
+                    User ID: <%= token.user_id %> | 
+                    Expires: <%= token.expires_at ? new Date(token.expires_at).toLocaleDateString() : 'Never' %>
+                </div>
+            </div>
+            <% }); %>
+            
+            <div style="margin-top: 1rem; padding: 1rem; background: #0a0a0a; border-radius: 6px;">
+                <p style="margin: 0; color: #93c5fd; font-size: 0.9rem;">
+                    <strong>How to use in n8n:</strong><br>
+                    1. Add this token to your n8n MCP node configuration<br>
+                    2. In your workflow, pass <code style="background: #2a2a2a; padding: 2px 6px; border-radius: 4px;">on_behalf_of_user_id</code> parameter with the target user's ID<br>
+                    3. The service token allows n8n to perform actions for any user
+                </p>
+            </div>
+        </div>
+        <% } %>
+        
         <div class="test-section">
             <h3>🧪 Test All Webhooks</h3>
             <p style="color: #999; margin: 0.5rem 0;">Send a test request to verify all webhook connections</p>
