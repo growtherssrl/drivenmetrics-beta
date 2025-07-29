@@ -495,6 +495,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        // Version: 1.1 - Force cache refresh
         // Function to get cookie value
         function getCookie(name) {
             const value = `; ${document.cookie}`;
@@ -511,6 +512,12 @@
         const sessionId = serverSessionId || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
         console.log('Chat using sessionId:', sessionId, 'From server cookie:', !!serverSessionId);
+        console.log('All cookies:', document.cookie);
+        
+        // If no session cookie found, alert the user
+        if (!serverSessionId) {
+            console.warn('No session_id cookie found! User might not be authenticated properly.');
+        }
         
         // Join session room
         socket.emit('join-session', sessionId);
