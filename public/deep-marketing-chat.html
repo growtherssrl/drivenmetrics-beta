@@ -507,23 +507,26 @@
         // Initialize WebSocket connection
         const socket = io();
         
-        // Get session ID from cookie (this is the authenticated session)
-        const serverSessionId = getCookie('session_id');
-        const sessionId = serverSessionId || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        // Get authenticated session ID from cookie
+        const authSessionId = getCookie('session_id');
+        // Generate a chat session ID for n8n chat widget compatibility
+        const chatSessionId = `chat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
         console.log('=== CHAT SESSION DEBUG ===');
-        console.log('Server sessionId from cookie:', serverSessionId);
-        console.log('Final sessionId being used:', sessionId);
-        console.log('From server cookie:', !!serverSessionId);
+        console.log('Auth sessionId from cookie:', authSessionId);
+        console.log('Chat sessionId for n8n:', chatSessionId);
+        console.log('Authenticated:', !!authSessionId);
         console.log('All cookies:', document.cookie);
-        console.log('Page loaded at:', new Date().toISOString());
         console.log('========================');
         
         // If no session cookie found, alert the user
-        if (!serverSessionId) {
+        if (!authSessionId) {
             console.error('❌ No session_id cookie found! User might not be authenticated properly.');
             console.error('Please make sure you are logged in at /login');
         }
+        
+        // Use chat session for n8n compatibility
+        const sessionId = chatSessionId;
         
         // Join session room
         socket.emit('join-session', sessionId);
@@ -597,7 +600,9 @@
                     body: JSON.stringify({
                         message: message,
                         metadata: {
-                            sessionId: sessionId
+                            sessionId: sessionId,  // Chat session for n8n
+                            authSessionId: authSessionId,  // Authenticated user session
+                            timestamp: new Date().toISOString()
                         }
                     })
                 });
