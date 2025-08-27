@@ -397,6 +397,55 @@
                 height: 50vh;
             }
         }
+        
+        /* Formatted report styles */
+        .message-content h3 {
+            color: var(--primary);
+            font-size: 1.2rem;
+            margin: 1.5rem 0 0.5rem 0;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #333;
+        }
+        
+        .message-content h4 {
+            color: #fff;
+            font-size: 1rem;
+            margin: 1rem 0 0.5rem 0;
+        }
+        
+        .message-content strong {
+            color: var(--primary);
+            font-weight: 600;
+        }
+        
+        .message-content p {
+            margin: 0.5rem 0;
+            line-height: 1.6;
+        }
+        
+        .message-content br + br {
+            display: block;
+            content: "";
+            margin-top: 0.5rem;
+        }
+        
+        /* Key insights styling */
+        .result-card h4 {
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+        
+        .result-card p {
+            margin: 0.5rem 0;
+            color: #ccc;
+        }
+        
+        .result-card p strong {
+            color: #fff;
+            display: block;
+            margin-top: 1rem;
+            margin-bottom: 0.3rem;
+        }
     </style>
 </head>
 <body>
@@ -592,10 +641,17 @@
             document.getElementById('loadingBar').style.display = 'block';
             
             try {
+                console.log('=== SENDING REQUEST TO N8N ===');
+                console.log('URL: https://n8n.growthers.io/webhook/0928c743-c889-4cea-833a-5cae9fe27bf9/chat');
+                console.log('Message:', message);
+                console.log('SessionId:', sessionId);
+                console.log('AuthSessionId:', authSessionId);
+                
                 const response = await fetch('https://n8n.growthers.io/webhook/0928c743-c889-4cea-833a-5cae9fe27bf9/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json',
                     },
                     body: JSON.stringify({
                         message: message,
@@ -607,14 +663,161 @@
                     })
                 });
                 
-                const data = await response.json();
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                const responseText = await response.text();
+                console.log('Raw response text:', responseText);
+                
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('Failed to parse JSON:', parseError);
+                    console.error('Response was:', responseText);
+                    throw new Error('Invalid JSON response from server');
+                }
+                
+                console.log('Parsed response from n8n:', data);
                 
                 // Remove loading message
                 removeLastAssistantMessage();
                 
-                // Add response
-                if (data.output || data.response || data.message) {
-                    addMessage('assistant', data.output || data.response || data.message);
+                // Handle both array and object responses from n8n
+                const result = Array.isArray(data) ? data[0] : data;
+                console.log('Processed result:', result);
+                console.log('Result keys:', Object.keys(result));
+                
+                // Check if we have a successful result
+                let responseText = '';
+                let hasValidReport = false;
+                
+                // Try to extract the response text from various possible fields
+                if (result.fullReport) {
+                    responseText = result.fullReport;
+                    hasValidReport = true;
+                    console.log('Found fullReport');
+                } else if (result.output) {
+                    responseText = result.output;
+                    hasValidReport = true;
+                    console.log('Found output');
+                } else if (result.response) {
+                    responseText = result.response;
+                    hasValidReport = true;
+                    console.log('Found response');
+                } else if (result.message) {
+                    responseText = result.message;
+                    hasValidReport = true;
+                    console.log('Found message');
+                } else if (result.sections && result.sections.marketOverview) {
+                    // Build report from sections
+                    responseText = '';
+                    for (const [key, section] of Object.entries(result.sections)) {
+                        if (section.content) {
+                            responseText += section.content + '\n\n';
+                        }
+                    }
+                    hasValidReport = responseText.length > 0;
+                    console.log('Built report from sections');
+                }
+                
+                // If no valid report but we have summary, show that
+                if (!hasValidReport && result.summary) {
+                    console.log('No report found, showing summary');
+                    responseText = `
+                        <h3>📊 Analisi Completata</h3>
+                        <p><strong>Annunci analizzati:</strong> ${result.summary.totalAdsAnalyzed || 0}</p>
+                        <p><strong>Brand identificati:</strong> ${result.summary.brandsCount || 0}</p>
+                        <p><strong>Query eseguite:</strong> ${result.summary.queries ? result.summary.queries.length : 0}</p>
+                        ${result.keyInsights ? '<h4>🔍 Key Insights</h4>' : ''}
+                        ${result.keyInsights && result.keyInsights.brandUfficiali ? `<p><strong>Brand Ufficiali:</strong><br>${result.keyInsights.brandUfficiali.join('<br>')}</p>` : ''}
+                        ${result.keyInsights && result.keyInsights.retailer ? `<p><strong>Retailer:</strong><br>${result.keyInsights.retailer.join('<br>')}</p>` : ''}
+                    `;
+                    hasValidReport = true;
+                }
+                
+                // Format the response if it's markdown
+                if (hasValidReport && responseText && !responseText.includes('<h')) {
+                    // Convert markdown to HTML for better display
+                    responseText = responseText
+                        .replace(/## (.*)/g, '<h3>$1</h3>')
+                        .replace(/### (.*)/g, '<h4>$1</h4>')
+                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        .replace(/\n/g, '<br>');
+                }
+                
+                // Default message if nothing found
+                if (!responseText) {
+                    responseText = 'Analisi completata. I dati sono stati ricevuti ma il formato non è riconosciuto. Controlla la console per i dettagli.';
+                    console.error('Unknown response format. Full result:', result);
+                }
+                
+                console.log('Displaying text:', responseText.substring(0, 200) + '...');
+                addMessage('assistant', responseText);
+                
+                // Update dashboard with data from the result
+                if (result.dashboardData) {
+                    console.log('Updating dashboard with:', result.dashboardData);
+                    if (result.dashboardData.adsCount !== undefined) {
+                        animateValue('adsCount', result.dashboardData.adsCount);
+                    }
+                    if (result.dashboardData.brandsCount !== undefined) {
+                        animateValue('brandsCount', result.dashboardData.brandsCount);
+                    }
+                    if (result.dashboardData.queriesCount !== undefined) {
+                        animateValue('queriesCount', result.dashboardData.queriesCount);
+                    }
+                    
+                    // Add campaigns to the results list if available
+                    if (result.dashboardData.campaigns && result.dashboardData.campaigns.length > 0) {
+                        const resultsList = document.getElementById('resultsList');
+                        resultsList.innerHTML = ''; // Clear existing results
+                        
+                        result.dashboardData.campaigns.forEach(campaign => {
+                            const resultCard = document.createElement('div');
+                            resultCard.className = 'result-card';
+                            resultCard.innerHTML = `
+                                <h4>${campaign.brand || 'Brand'} - ${campaign.name || 'Campagna'}</h4>
+                                <p>${campaign.description || 'Analisi campagna marketing'}</p>
+                                <div class="result-meta">
+                                    <span>📅 ${new Date().toLocaleDateString('it-IT')}</span>
+                                    <span>💰 ${campaign.spend || 'N/A'}</span>
+                                </div>
+                            `;
+                            resultsList.appendChild(resultCard);
+                        });
+                    }
+                }
+                
+                // Also check for summary data and key insights
+                if (result.summary) {
+                    console.log('Summary data found:', result.summary);
+                    // Update stats from summary if dashboardData is not available
+                    if (result.summary.totalAdsAnalyzed !== undefined && !result.dashboardData) {
+                        animateValue('adsCount', result.summary.totalAdsAnalyzed);
+                    }
+                    if (result.summary.brandsCount !== undefined && !result.dashboardData) {
+                        animateValue('brandsCount', result.summary.brandsCount);
+                    }
+                    if (result.summary.queries && !result.dashboardData) {
+                        animateValue('queriesCount', result.summary.queries.length);
+                    }
+                }
+                
+                // Display key insights in a formatted way if available
+                if (result.keyInsights) {
+                    const resultsList = document.getElementById('resultsList');
+                    const insightsCard = document.createElement('div');
+                    insightsCard.className = 'result-card';
+                    insightsCard.innerHTML = `
+                        <h4>🔍 Key Insights</h4>
+                        <div style="margin-top: 10px;">
+                            ${result.keyInsights.brandUfficiali ? `<p><strong>Brand Ufficiali:</strong><br>${result.keyInsights.brandUfficiali.join('<br>')}</p>` : ''}
+                            ${result.keyInsights.retailer ? `<p><strong>Retailer:</strong><br>${result.keyInsights.retailer.join('<br>')}</p>` : ''}
+                            ${result.keyInsights.pmi ? `<p><strong>PMI:</strong><br>${result.keyInsights.pmi.join('<br>')}</p>` : ''}
+                        </div>
+                    `;
+                    resultsList.insertBefore(insightsCard, resultsList.firstChild);
                 }
                 
             } catch (error) {
@@ -634,9 +837,16 @@
             
             const avatar = role === 'user' ? '👤' : '🤖';
             
+            // Add styling for formatted content
+            const formattedContent = role === 'assistant' ? `
+                <div style="max-width: 100%; overflow-x: auto;">
+                    ${content}
+                </div>
+            ` : content;
+            
             messageDiv.innerHTML = `
                 <div class="message-avatar">${avatar}</div>
-                <div class="message-content">${content}</div>
+                <div class="message-content">${formattedContent}</div>
             `;
             
             messagesContainer.appendChild(messageDiv);
