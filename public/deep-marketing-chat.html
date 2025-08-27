@@ -621,15 +621,15 @@
         // Send message
         async function sendMessage() {
             console.log('sendMessage called');
-            try {
-                const input = document.getElementById('chatInput');
-                const message = input.value.trim();
-                
-                console.log('Message to send:', message);
-                if (!message) {
-                    console.log('Empty message, returning');
-                    return;
-                }
+            
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            console.log('Message to send:', message);
+            if (!message) {
+                console.log('Empty message, returning');
+                return;
+            }
             
             // Add user message
             addMessage('user', message);
@@ -833,10 +833,6 @@
                 addMessage('assistant', `Mi dispiace, si è verificato un errore: ${error.message}. Riprova tra qualche istante.`);
             } finally {
                 document.getElementById('loadingBar').style.display = 'none';
-            }
-            } catch (outerError) {
-                console.error('Critical error in sendMessage:', outerError);
-                alert('Errore critico nell\'invio del messaggio. Controlla la console per i dettagli.');
             }
         }
 
