@@ -695,42 +695,42 @@
                 console.log('Result keys:', Object.keys(result));
                 
                 // Check if we have a successful result
-                let responseText = '';
+                let reportText = '';
                 let hasValidReport = false;
                 
                 // Try to extract the response text from various possible fields
                 if (result.fullReport) {
-                    responseText = result.fullReport;
+                    reportText = result.fullReport;
                     hasValidReport = true;
                     console.log('Found fullReport');
                 } else if (result.output) {
-                    responseText = result.output;
+                    reportText = result.output;
                     hasValidReport = true;
                     console.log('Found output');
                 } else if (result.response) {
-                    responseText = result.response;
+                    reportText = result.response;
                     hasValidReport = true;
                     console.log('Found response');
                 } else if (result.message) {
-                    responseText = result.message;
+                    reportText = result.message;
                     hasValidReport = true;
                     console.log('Found message');
                 } else if (result.sections && result.sections.marketOverview) {
                     // Build report from sections
-                    responseText = '';
+                    reportText = '';
                     for (const [key, section] of Object.entries(result.sections)) {
                         if (section.content) {
-                            responseText += section.content + '\n\n';
+                            reportText += section.content + '\n\n';
                         }
                     }
-                    hasValidReport = responseText.length > 0;
+                    hasValidReport = reportText.length > 0;
                     console.log('Built report from sections');
                 }
                 
                 // If no valid report but we have summary, show that
                 if (!hasValidReport && result.summary) {
                     console.log('No report found, showing summary');
-                    responseText = `
+                    reportText = `
                         <h3>📊 Analisi Completata</h3>
                         <p><strong>Annunci analizzati:</strong> ${result.summary.totalAdsAnalyzed || 0}</p>
                         <p><strong>Brand identificati:</strong> ${result.summary.brandsCount || 0}</p>
@@ -743,9 +743,9 @@
                 }
                 
                 // Format the response if it's markdown
-                if (hasValidReport && responseText && !responseText.includes('<h')) {
+                if (hasValidReport && reportText && !reportText.includes('<h')) {
                     // Convert markdown to HTML for better display
-                    responseText = responseText
+                    reportText = reportText
                         .replace(/## (.*)/g, '<h3>$1</h3>')
                         .replace(/### (.*)/g, '<h4>$1</h4>')
                         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -753,13 +753,13 @@
                 }
                 
                 // Default message if nothing found
-                if (!responseText) {
-                    responseText = 'Analisi completata. I dati sono stati ricevuti ma il formato non è riconosciuto. Controlla la console per i dettagli.';
+                if (!reportText) {
+                    reportText = 'Analisi completata. I dati sono stati ricevuti ma il formato non è riconosciuto. Controlla la console per i dettagli.';
                     console.error('Unknown response format. Full result:', result);
                 }
                 
-                console.log('Displaying text:', responseText.substring(0, 200) + '...');
-                addMessage('assistant', responseText);
+                console.log('Displaying text:', reportText.substring(0, 200) + '...');
+                addMessage('assistant', reportText);
                 
                 // Update dashboard with data from the result
                 if (result.dashboardData) {
