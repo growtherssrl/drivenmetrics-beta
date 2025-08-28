@@ -672,16 +672,34 @@
                 console.log('Response status:', response.status);
                 console.log('Response headers:', response.headers);
                 
+                // Check for error status
+                if (response.status === 500) {
+                    console.error('Server error 500 from n8n');
+                    removeLastAssistantMessage();
+                    addMessage('assistant', '⚠️ Il servizio di analisi sta avendo problemi tecnici. Per favore riprova tra qualche minuto o contatta il supporto.');
+                    return;
+                }
+                
                 const responseText = await response.text();
                 console.log('Raw response text:', responseText);
                 
                 let data;
                 try {
+                    // Try to parse as JSON
                     data = JSON.parse(responseText);
                 } catch (parseError) {
                     console.error('Failed to parse JSON:', parseError);
                     console.error('Response was:', responseText);
-                    throw new Error('Invalid JSON response from server');
+                    
+                    // If not JSON, treat as plain text response
+                    if (responseText && responseText.length > 0) {
+                        data = {
+                            output: responseText,
+                            message: responseText
+                        };
+                    } else {
+                        throw new Error('Invalid response from server');
+                    }
                 }
                 
                 console.log('Parsed response from n8n:', data);
