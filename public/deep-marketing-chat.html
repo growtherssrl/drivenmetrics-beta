@@ -647,11 +647,44 @@
             document.getElementById('loadingBar').style.display = 'block';
             
             try {
+                // First, get the real session from the API
+                console.log('=== GETTING SESSION FROM API ===');
+                let realSessionId = authSessionId; // Default fallback
+                let userEmail = '';
+                let userId = '';
+                
+                try {
+                    const sessionResponse = await fetch('https://beta.drivenmetrics.com/api/session/lookup', {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    if (sessionResponse.ok) {
+                        const sessionData = await sessionResponse.json();
+                        console.log('Session data from API:', sessionData);
+                        
+                        if (Array.isArray(sessionData) && sessionData.length > 0 && sessionData[0].success) {
+                            realSessionId = sessionData[0].sessionId;
+                            userId = sessionData[0].userId;
+                            userEmail = sessionData[0].email;
+                            console.log('Using real sessionId:', realSessionId);
+                        }
+                    } else {
+                        console.warn('Could not fetch session, using cookie value');
+                    }
+                } catch (sessionError) {
+                    console.error('Error fetching session:', sessionError);
+                }
+                
                 console.log('=== SENDING REQUEST TO N8N ===');
                 console.log('URL: https://n8n.growthers.io/webhook/0928c743-c889-4cea-833a-5cae9fe27bf9/chat');
                 console.log('Message:', message);
                 console.log('SessionId:', sessionId);
-                console.log('AuthSessionId:', authSessionId);
+                console.log('RealSessionId:', realSessionId);
+                console.log('UserEmail:', userEmail);
                 
                 const response = await fetch('https://n8n.growthers.io/webhook/0928c743-c889-4cea-833a-5cae9fe27bf9/chat', {
                     method: 'POST',
@@ -662,8 +695,10 @@
                     body: JSON.stringify({
                         message: message,
                         metadata: {
-                            sessionId: sessionId,  // Chat session for n8n
-                            authSessionId: authSessionId,  // Authenticated user session
+                            sessionId: realSessionId,  // Real session from API
+                            authSessionId: realSessionId,  // Same as sessionId for compatibility
+                            userId: userId,  // User ID from API
+                            userEmail: userEmail,  // User email from API
                             timestamp: new Date().toISOString()
                         }
                     })
