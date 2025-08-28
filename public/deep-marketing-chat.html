@@ -868,20 +868,20 @@
                 addMessage('assistant', reportText);
                 
                 // Update dashboard with data from the result
-                if (result.dashboardData) {
-                    console.log('Updating dashboard with:', result.dashboardData);
-                    if (result.dashboardData.adsCount !== undefined) {
-                        animateValue('adsCount', result.dashboardData.adsCount);
-                    }
-                    if (result.dashboardData.brandsCount !== undefined) {
-                        animateValue('brandsCount', result.dashboardData.brandsCount);
-                    }
-                    if (result.dashboardData.queriesCount !== undefined) {
-                        animateValue('queriesCount', result.dashboardData.queriesCount);
-                    }
+                if (result.dashboardData || result.summary) {
+                    console.log('Updating dashboard with:', result.dashboardData || result.summary);
+                    
+                    // Priority to dashboardData, fallback to summary
+                    const adsCount = result.dashboardData?.adsCount ?? result.summary?.totalAdsAnalyzed ?? 0;
+                    const brandsCount = result.dashboardData?.brandsCount ?? result.summary?.brandsCount ?? 0;
+                    const queriesCount = result.dashboardData?.queriesCount ?? result.summary?.queries?.length ?? 0;
+                    
+                    animateValue('adsCount', adsCount);
+                    animateValue('brandsCount', brandsCount);
+                    animateValue('queriesCount', queriesCount);
                     
                     // Add campaigns to the results list if available
-                    if (result.dashboardData.campaigns && result.dashboardData.campaigns.length > 0) {
+                    if (result.dashboardData?.campaigns && result.dashboardData.campaigns.length > 0) {
                         const resultsList = document.getElementById('resultsList');
                         resultsList.innerHTML = ''; // Clear existing results
                         
@@ -901,35 +901,77 @@
                     }
                 }
                 
-                // Also check for summary data and key insights
-                if (result.summary) {
-                    console.log('Summary data found:', result.summary);
-                    // Update stats from summary if dashboardData is not available
-                    if (result.summary.totalAdsAnalyzed !== undefined && !result.dashboardData) {
-                        animateValue('adsCount', result.summary.totalAdsAnalyzed);
-                    }
-                    if (result.summary.brandsCount !== undefined && !result.dashboardData) {
-                        animateValue('brandsCount', result.summary.brandsCount);
-                    }
-                    if (result.summary.queries && !result.dashboardData) {
-                        animateValue('queriesCount', result.summary.queries.length);
-                    }
-                }
-                
                 // Display key insights in a formatted way if available
                 if (result.keyInsights) {
                     const resultsList = document.getElementById('resultsList');
-                    const insightsCard = document.createElement('div');
-                    insightsCard.className = 'result-card';
-                    insightsCard.innerHTML = `
-                        <h4>🔍 Key Insights</h4>
-                        <div style="margin-top: 10px;">
-                            ${result.keyInsights.brandUfficiali ? `<p><strong>Brand Ufficiali:</strong><br>${result.keyInsights.brandUfficiali.join('<br>')}</p>` : ''}
-                            ${result.keyInsights.retailer ? `<p><strong>Retailer:</strong><br>${result.keyInsights.retailer.join('<br>')}</p>` : ''}
-                            ${result.keyInsights.pmi ? `<p><strong>PMI:</strong><br>${result.keyInsights.pmi.join('<br>')}</p>` : ''}
-                        </div>
-                    `;
-                    resultsList.insertBefore(insightsCard, resultsList.firstChild);
+                    
+                    // Clear existing insights
+                    const existingInsights = resultsList.querySelector('.insights-container');
+                    if (existingInsights) existingInsights.remove();
+                    
+                    // Create insights container
+                    const insightsContainer = document.createElement('div');
+                    insightsContainer.className = 'insights-container';
+                    insightsContainer.style.cssText = 'display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1rem;';
+                    
+                    // Brand Ufficiali
+                    if (result.keyInsights.brandUfficiali && result.keyInsights.brandUfficiali.length > 0) {
+                        const brandCard = document.createElement('div');
+                        brandCard.className = 'result-card';
+                        brandCard.innerHTML = `
+                            <h4>🥇 Brand Ufficiali (${result.keyInsights.brandUfficiali.length})</h4>
+                            <div style="margin-top: 10px; font-size: 0.9rem; color: #ccc;">
+                                ${result.keyInsights.brandUfficiali.map(b => `<div style="margin: 5px 0;">• ${b}</div>`).join('')}
+                            </div>
+                        `;
+                        insightsContainer.appendChild(brandCard);
+                    }
+                    
+                    // Retailer
+                    if (result.keyInsights.retailer && result.keyInsights.retailer.length > 0) {
+                        const retailerCard = document.createElement('div');
+                        retailerCard.className = 'result-card';
+                        retailerCard.innerHTML = `
+                            <h4>🏪 Retailer (${result.keyInsights.retailer.length})</h4>
+                            <div style="margin-top: 10px; font-size: 0.9rem; color: #ccc; max-height: 200px; overflow-y: auto;">
+                                ${result.keyInsights.retailer.slice(0, 5).map(r => `<div style="margin: 5px 0;">• ${r}</div>`).join('')}
+                                ${result.keyInsights.retailer.length > 5 ? `<div style="margin: 5px 0; color: #0066ff;">... e altri ${result.keyInsights.retailer.length - 5}</div>` : ''}
+                            </div>
+                        `;
+                        insightsContainer.appendChild(retailerCard);
+                    }
+                    
+                    // PMI
+                    if (result.keyInsights.pmi && result.keyInsights.pmi.length > 0) {
+                        const pmiCard = document.createElement('div');
+                        pmiCard.className = 'result-card';
+                        pmiCard.innerHTML = `
+                            <h4>🏬 PMI Locali (${result.keyInsights.pmi.length})</h4>
+                            <div style="margin-top: 10px; font-size: 0.9rem; color: #ccc;">
+                                ${result.keyInsights.pmi.map(p => `<div style="margin: 5px 0;">• ${p}</div>`).join('')}
+                            </div>
+                        `;
+                        insightsContainer.appendChild(pmiCard);
+                    }
+                    
+                    // Segnalazioni
+                    if (result.keyInsights.segnalazioni && result.keyInsights.segnalazioni.length > 0) {
+                        const alertCard = document.createElement('div');
+                        alertCard.className = 'result-card';
+                        alertCard.style.borderColor = '#ff3366';
+                        alertCard.innerHTML = `
+                            <h4 style="color: #ff3366;">🚨 Segnalazioni (${result.keyInsights.segnalazioni.length})</h4>
+                            <div style="margin-top: 10px; font-size: 0.9rem; color: #ff9999;">
+                                ${result.keyInsights.segnalazioni.map(s => `<div style="margin: 5px 0;">• ${s}</div>`).join('')}
+                            </div>
+                        `;
+                        insightsContainer.appendChild(alertCard);
+                    }
+                    
+                    // Add container to results list
+                    if (insightsContainer.childNodes.length > 0) {
+                        resultsList.insertBefore(insightsContainer, resultsList.firstChild);
+                    }
                 }
                 
             } catch (error) {
