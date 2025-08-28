@@ -399,34 +399,69 @@
         }
         
         /* Formatted report styles */
-        .message-content h3 {
-            color: var(--primary);
-            font-size: 1.2rem;
-            margin: 1.5rem 0 0.5rem 0;
+        .message-content h2 {
+            color: #0066ff;
+            font-size: 1.4rem;
+            margin: 1.5rem 0 1rem 0;
             padding-bottom: 0.5rem;
-            border-bottom: 1px solid #333;
+            border-bottom: 2px solid #0066ff;
+        }
+        
+        .message-content h3 {
+            color: #fff;
+            font-size: 1.2rem;
+            margin: 1.2rem 0 0.8rem 0;
         }
         
         .message-content h4 {
-            color: #fff;
+            color: #ccc;
             font-size: 1rem;
             margin: 1rem 0 0.5rem 0;
         }
         
         .message-content strong {
-            color: var(--primary);
+            color: #0066ff;
             font-weight: 600;
         }
         
         .message-content p {
-            margin: 0.5rem 0;
+            margin: 0.8rem 0;
             line-height: 1.6;
+        }
+        
+        .message-content li {
+            margin: 0.5rem 0;
+            list-style-position: inside;
         }
         
         .message-content br + br {
             display: block;
             content: "";
             margin-top: 0.5rem;
+        }
+        
+        /* Scrollable report container */
+        .message-content > div {
+            scrollbar-width: thin;
+            scrollbar-color: #0066ff #1a1a1a;
+        }
+        
+        .message-content > div::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .message-content > div::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        
+        .message-content > div::-webkit-scrollbar-thumb {
+            background: #0066ff;
+            border-radius: 4px;
+        }
+        
+        .message-content > div::-webkit-scrollbar-thumb:hover {
+            background: #0052cc;
         }
         
         /* Key insights styling */
@@ -796,13 +831,31 @@
                 }
                 
                 // Format the response if it's markdown
-                if (hasValidReport && reportText && !reportText.includes('<h')) {
-                    // Convert markdown to HTML for better display
+                if (hasValidReport && reportText) {
+                    // Enhanced markdown to HTML conversion
                     reportText = reportText
-                        .replace(/## (.*)/g, '<h3>$1</h3>')
-                        .replace(/### (.*)/g, '<h4>$1</h4>')
-                        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                        // Headers
+                        .replace(/^# (.*?)$/gm, '<h2 style="color: #0066ff; margin: 1.5rem 0 1rem 0; padding-bottom: 0.5rem; border-bottom: 2px solid #0066ff;">$1</h2>')
+                        .replace(/^## (.*?)$/gm, '<h3 style="color: #fff; margin: 1.2rem 0 0.8rem 0;">$1</h3>')
+                        .replace(/^### (.*?)$/gm, '<h4 style="color: #ccc; margin: 1rem 0 0.5rem 0;">$1</h4>')
+                        // Bold text
+                        .replace(/\*\*(.*?)\*\*/g, '<strong style="color: #0066ff;">$1</strong>')
+                        // Lists
+                        .replace(/^- (.*?)$/gm, '<li style="margin: 0.5rem 0;">$1</li>')
+                        .replace(/^• (.*?)$/gm, '<li style="margin: 0.5rem 0;">$1</li>')
+                        // Emojis and special formatting
+                        .replace(/^([🎯🏢💬🎨📱💡📊🔍🏆🚨❌✅].*)$/gm, '<div style="font-size: 1.1rem; margin: 0.8rem 0; font-weight: 600;">$1</div>')
+                        // Line breaks
+                        .replace(/\n\n/g, '</p><p style="margin: 0.8rem 0;">')
                         .replace(/\n/g, '<br>');
+                    
+                    // Wrap in paragraph if not already wrapped
+                    if (!reportText.startsWith('<')) {
+                        reportText = '<p style="margin: 0.8rem 0;">' + reportText + '</p>';
+                    }
+                    
+                    // Wrap in a scrollable container for long reports
+                    reportText = '<div style="max-height: 500px; overflow-y: auto; padding-right: 10px;">' + reportText + '</div>';
                 }
                 
                 // Default message if nothing found
