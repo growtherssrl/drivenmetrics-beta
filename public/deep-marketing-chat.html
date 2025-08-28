@@ -509,7 +509,31 @@
                 <div class="message assistant">
                     <div class="message-avatar">🤖</div>
                     <div class="message-content">
-                        Ciao! Sono Deep Marketing AI. Posso analizzare campagne pubblicitarie, trovare competitor e generare report dettagliati. Come posso aiutarti oggi?
+                        <p>Ciao! Sono <strong style="color: #0066ff;">Deep Marketing AI</strong> 🎯</p>
+                        <p style="margin-top: 10px;">Posso analizzare campagne pubblicitarie su Facebook, trovare competitor e generare report dettagliati.</p>
+                        
+                        <div style="margin-top: 15px; padding: 15px; background: rgba(0, 102, 255, 0.1); border-radius: 8px; border: 1px solid rgba(0, 102, 255, 0.2);">
+                            <p style="font-size: 0.9rem; color: #0066ff; margin-bottom: 10px;">💡 Esempi di ricerche:</p>
+                            <ul style="list-style: none; font-size: 0.85rem; color: #ccc;">
+                                <li style="margin: 5px 0; cursor: pointer;" onclick="document.getElementById('chatInput').value='Analizza le campagne di Nike'; document.getElementById('chatInput').focus();">
+                                    • "Analizza le campagne di Nike"
+                                </li>
+                                <li style="margin: 5px 0; cursor: pointer;" onclick="document.getElementById('chatInput').value='Recuperami le ads di Sustenium'; document.getElementById('chatInput').focus();">
+                                    • "Recuperami le ads di Sustenium"
+                                </li>
+                                <li style="margin: 5px 0; cursor: pointer;" onclick="document.getElementById('chatInput').value='Mostrami i competitor di Decathlon'; document.getElementById('chatInput').focus();">
+                                    • "Mostrami i competitor di Decathlon"
+                                </li>
+                                <li style="margin: 5px 0; cursor: pointer;" onclick="document.getElementById('chatInput').value='Analisi del settore integratori alimentari'; document.getElementById('chatInput').focus();">
+                                    • "Analisi del settore integratori alimentari"
+                                </li>
+                            </ul>
+                            <p style="font-size: 0.8rem; color: #666; margin-top: 10px;">
+                                💡 Clicca su un esempio per usarlo
+                            </p>
+                        </div>
+                        
+                        <p style="margin-top: 15px; font-size: 0.9rem;">Come posso aiutarti oggi?</p>
                     </div>
                 </div>
             </div>
@@ -677,9 +701,26 @@
             document.getElementById('dashboardEmpty').style.display = 'none';
             document.getElementById('dashboardContent').classList.add('active');
             
-            // Show loading
-            addMessage('assistant', '<div class="loading-dots"><span></span><span></span><span></span></div>');
+            // Show loading with status
+            const loadingMessageId = 'loading-' + Date.now();
+            addMessage('assistant', `
+                <div id="${loadingMessageId}">
+                    <div class="loading-dots"><span></span><span></span><span></span></div>
+                    <div style="margin-top: 10px; font-size: 0.85rem; color: #666;">
+                        🔍 Sto analizzando la tua richiesta...
+                    </div>
+                </div>
+            `, loadingMessageId);
             document.getElementById('loadingBar').style.display = 'block';
+            
+            // Update loading status
+            const updateLoadingStatus = (status) => {
+                const loadingEl = document.getElementById(loadingMessageId);
+                if (loadingEl) {
+                    const statusEl = loadingEl.querySelector('div:last-child');
+                    if (statusEl) statusEl.innerHTML = status;
+                }
+            };
             
             try {
                 // First, get the real session from the API
@@ -689,6 +730,7 @@
                 let userId = '';
                 
                 try {
+                    updateLoadingStatus('🔐 Verifico la sessione utente...');
                     const sessionResponse = await fetch('https://beta.drivenmetrics.com/api/session/lookup', {
                         method: 'GET',
                         credentials: 'include',
@@ -706,6 +748,7 @@
                             userId = sessionData[0].userId;
                             userEmail = sessionData[0].email;
                             console.log('Using real sessionId:', realSessionId);
+                            updateLoadingStatus('✅ Sessione verificata');
                         }
                     } else {
                         console.warn('Could not fetch session, using cookie value');
@@ -713,6 +756,11 @@
                 } catch (sessionError) {
                     console.error('Error fetching session:', sessionError);
                 }
+                
+                // Wait a moment for better UX
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                updateLoadingStatus('🚀 Invio richiesta al sistema di analisi...');
                 
                 console.log('=== SENDING REQUEST TO N8N ===');
                 console.log('URL: https://n8n.growthers.io/webhook/0928c743-c889-4cea-833a-5cae9fe27bf9/chat');
@@ -746,10 +794,24 @@
                 if (response.status === 500) {
                     console.error('Server error 500 from n8n');
                     removeLastAssistantMessage();
-                    addMessage('assistant', '⚠️ Il servizio di analisi sta avendo problemi tecnici. Per favore riprova tra qualche minuto o contatta il supporto.');
+                    addMessage('assistant', `
+                        <div style="border-left: 3px solid #ff3366; padding-left: 15px;">
+                            <h4 style="color: #ff3366; margin-bottom: 10px;">⚠️ Servizio temporaneamente non disponibile</h4>
+                            <p style="color: #ccc; margin-bottom: 10px;">Il sistema di analisi sta riscontrando difficoltà tecniche.</p>
+                            <div style="margin-top: 15px;">
+                                <p style="color: #999; font-size: 0.9rem;">Suggerimenti:</p>
+                                <ul style="color: #999; font-size: 0.9rem; margin-left: 20px;">
+                                    <li>Riprova tra qualche minuto</li>
+                                    <li>Prova con una ricerca più semplice</li>
+                                    <li>Se il problema persiste, contatta il supporto</li>
+                                </ul>
+                            </div>
+                        </div>
+                    `);
                     return;
                 }
                 
+                updateLoadingStatus('📊 Ricevo i dati di analisi...');
                 const responseText = await response.text();
                 console.log('Raw response text:', responseText);
                 
@@ -985,10 +1047,11 @@
         }
 
         // Add message to chat
-        function addMessage(role, content) {
+        function addMessage(role, content, messageId = null) {
             const messagesContainer = document.getElementById('chatMessages');
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
+            if (messageId) messageDiv.id = 'msg-' + messageId;
             
             const avatar = role === 'user' ? '👤' : '🤖';
             
