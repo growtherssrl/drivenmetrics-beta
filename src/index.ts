@@ -1818,7 +1818,7 @@ app.post("/login", express.urlencoded({ extended: true }), async (req, res) => {
           email, 
           password,
           options: {
-            emailRedirectTo: `https://mcp.drivenmetrics.com/auth/confirm`
+            emailRedirectTo: `${baseUrl}/auth/confirm`
           }
         });
         if (error) {
@@ -1965,7 +1965,7 @@ app.post("/reset-password", async (req, res) => {
   if (supabase) {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `https://mcp.drivenmetrics.com/update-password`
+        redirectTo: `${baseUrl}/update-password`
       });
       
       if (error) {
@@ -2188,7 +2188,7 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
     const tokenParams = {
       client_id: FB_APP_ID,
       client_secret: FB_APP_SECRET,
-      redirect_uri: `https://mcp.drivenmetrics.com/api/authorise/facebook/callback`,
+      redirect_uri: `${baseUrl}/api/authorise/facebook/callback`,
       code: code
     };
     
@@ -3281,6 +3281,102 @@ app.get("/deep-marketing-chat.html", (req, res) => {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, '../public/deep-marketing-chat.html'));
+});
+
+// Custom Chat routes
+app.get("/chat", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  if (!sessionId || !sessions.has(sessionId)) {
+    return res.redirect("/login?redirect=/chat");
+  }
+  
+  // Serve integrated chat page
+  res.sendFile(path.join(__dirname, "../public/integrated-custom-chat.html"));
+});
+
+// Chat configuration endpoint
+app.get("/api/chat/config", (req, res) => {
+  res.json({
+    webhookUrl: process.env.N8N_WEBHOOK_URL || 'https://n8n.growthers.io/webhook/21b75195-84e4-4e1b-8350-166b0b223a12/chat',
+    enableStreaming: true,
+    features: {
+      markdown: true,
+      fileUpload: false,
+      voiceInput: false
+    }
+  });
+});
+
+// Chat proxy endpoint (optional - to hide n8n webhook)
+app.post("/api/chat/message", async (req, res) => {
+  const sessionId = req.cookies?.session_id;
+  const session = sessionId ? sessions.get(sessionId) : null;
+  const { message, metadata } = req.body;
+  
+  if (!session) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  
+  try {
+    const webhookUrl = process.env.N8N_WEBHOOK_URL || 'https://n8n.growthers.io/webhook/21b75195-84e4-4e1b-8350-166b0b223a12/chat';
+    
+    // Forward to n8n webhook
+    const n8nResponse = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream, application/json'
+      },
+      body: JSON.stringify({
+        message,
+        sessionId: session.sessionId,
+        userId: session.userId,
+        userEmail: session.userEmail,
+        metadata: {
+          ...metadata,
+          source: 'drivenmetrics-chat',
+          ip: req.ip,
+          userAgent: req.get('user-agent')
+        }
+      })
+    });
+
+    // Check if streaming
+    const contentType = n8nResponse.headers.get('content-type');
+    if (contentType?.includes('text/event-stream')) {
+      // Forward SSE stream
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      
+      // Pipe the stream
+      const reader = n8nResponse.body?.getReader();
+      if (reader) {
+        const decoder = new TextDecoder();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            res.write(chunk);
+          }
+        } finally {
+          reader.releaseLock();
+        }
+      }
+      res.end();
+    } else {
+      // Forward JSON response
+      const data = await n8nResponse.json();
+      res.json(data);
+    }
+  } catch (error) {
+    console.error('Chat proxy error:', error);
+    res.status(500).json({ 
+      error: 'Failed to process message',
+      details: error.message 
+    });
+  }
 });
 
 // Deep Marketing routes
