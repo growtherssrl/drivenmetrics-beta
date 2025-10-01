@@ -612,6 +612,49 @@
             return null;
         }
         
+        // Format streaming content as it arrives
+        function formatStreamContent(content) {
+            if (!content) return '';
+            
+            // Convert markdown-style formatting to HTML
+            let formatted = content;
+            
+            // Headers
+            formatted = formatted.replace(/^### (.*?)$/gm, '<h4>$1</h4>');
+            formatted = formatted.replace(/^## (.*?)$/gm, '<h3>$1</h3>');
+            formatted = formatted.replace(/^# (.*?)$/gm, '<h2>$1</h2>');
+            
+            // Bold text
+            formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Italic text
+            formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // Lists
+            formatted = formatted.replace(/^- (.*?)$/gm, '<li>$1</li>');
+            formatted = formatted.replace(/(<li>.*?<\/li>\n?)+/g, (match) => {
+                return '<ul>' + match + '</ul>';
+            });
+            
+            // Numbered lists
+            formatted = formatted.replace(/^\d+\. (.*?)$/gm, '<li>$1</li>');
+            
+            // Line breaks
+            formatted = formatted.replace(/\n\n/g, '</p><p>');
+            formatted = formatted.replace(/\n/g, '<br>');
+            
+            // Wrap in paragraphs if not already formatted
+            if (!formatted.includes('<p>') && !formatted.includes('<h') && !formatted.includes('<ul>')) {
+                formatted = '<p>' + formatted + '</p>';
+            }
+            
+            // Code blocks
+            formatted = formatted.replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>');
+            formatted = formatted.replace(/`(.*?)`/g, '<code>$1</code>');
+            
+            return formatted;
+        }
+        
         // Initialize WebSocket connection
         const socket = io();
         
@@ -773,7 +816,7 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json',
+                        'Accept': 'text/event-stream, application/json',
                     },
                     body: JSON.stringify({
                         message: message,
@@ -812,32 +855,101 @@
                 }
                 
                 updateLoadingStatus('📊 Ricevo i dati di analisi...');
-                const responseText = await response.text();
-                console.log('Raw response text:', responseText);
+                
+                // Check if response is streaming
+                const contentType = response.headers.get('content-type') || '';
+                const isStreaming = contentType.includes('text/event-stream');
+                
+                console.log('Content-Type:', contentType);
+                console.log('Is Streaming:', isStreaming);
                 
                 let data;
-                try {
-                    // Try to parse as JSON
-                    data = JSON.parse(responseText);
-                } catch (parseError) {
-                    console.error('Failed to parse JSON:', parseError);
-                    console.error('Response was:', responseText);
+                
+                if (isStreaming) {
+                    // Handle Server-Sent Events streaming
+                    updateLoadingStatus('🔄 Elaborazione in corso...');
                     
-                    // If not JSON, treat as plain text response
-                    if (responseText && responseText.length > 0) {
-                        data = {
-                            output: responseText,
-                            message: responseText
-                        };
-                    } else {
-                        throw new Error('Invalid response from server');
+                    // Remove loading message and create streaming message
+                    removeLastAssistantMessage();
+                    const streamMessageId = 'stream-' + Date.now();
+                    addMessage('assistant', '<div id="' + streamMessageId + '-content"></div>', streamMessageId);
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    let fullContent = '';
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || '';
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ') || line.startsWith('{')) {
+                                try {
+                                    const jsonStr = line.startsWith('data: ') ? line.slice(6) : line;
+                                    const event = JSON.parse(jsonStr);
+                                    
+                                    if (event.type === 'item' && event.content && event.content !== 'undefined') {
+                                        fullContent += event.content;
+                                        // Update message in real-time
+                                        const contentEl = document.getElementById(streamMessageId + '-content');
+                                        if (contentEl) {
+                                            contentEl.innerHTML = formatStreamContent(fullContent);
+                                            // Auto-scroll
+                                            const messagesContainer = document.getElementById('chatMessages');
+                                            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                                        }
+                                    } else if (event.type === 'end') {
+                                        console.log('Stream ended');
+                                        break;
+                                    }
+                                } catch (e) {
+                                    console.log('Parse error for line:', line, e);
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Set final content
+                    data = {
+                        output: fullContent || 'Analisi completata',
+                        fullReport: fullContent
+                    };
+                    
+                } else {
+                    // Handle regular JSON response
+                    const responseText = await response.text();
+                    console.log('Raw response text:', responseText);
+                    
+                    try {
+                        // Try to parse as JSON
+                        data = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.error('Failed to parse JSON:', parseError);
+                        console.error('Response was:', responseText);
+                        
+                        // If not JSON, treat as plain text response
+                        if (responseText && responseText.length > 0) {
+                            data = {
+                                output: responseText,
+                                message: responseText
+                            };
+                        } else {
+                            throw new Error('Invalid response from server');
+                        }
                     }
                 }
                 
                 console.log('Parsed response from n8n:', data);
                 
-                // Remove loading message
-                removeLastAssistantMessage();
+                // Remove loading message only if not streaming (for streaming it's already removed)
+                if (!isStreaming) {
+                    removeLastAssistantMessage();
+                }
                 
                 // Handle both array and object responses from n8n
                 const result = Array.isArray(data) ? data[0] : data;
@@ -926,8 +1038,11 @@
                     console.error('Unknown response format. Full result:', result);
                 }
                 
-                console.log('Displaying text:', reportText.substring(0, 200) + '...');
-                addMessage('assistant', reportText);
+                // Only add message if not streaming (streaming already displayed the content)
+                if (!isStreaming) {
+                    console.log('Displaying text:', reportText.substring(0, 200) + '...');
+                    addMessage('assistant', reportText);
+                }
                 
                 // Update dashboard with data from the result
                 if (result.dashboardData || result.summary) {

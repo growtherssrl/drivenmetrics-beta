@@ -3372,9 +3372,9 @@ app.post("/api/chat/message", async (req, res) => {
     }
   } catch (error) {
     console.error('Chat proxy error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to process message',
-      details: error.message 
+      details: error instanceof Error ? error.message : String(error)
     });
   }
 });

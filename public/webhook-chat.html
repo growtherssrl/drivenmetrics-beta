@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DrivenMetrics Chat - Webhook Mode</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0066ff;
+            --primary-dark: #0052cc;
+            --dark: #0a0a0a;
+            --dark-card: #141414;
+            --border: #262626;
+            --text-primary: #ffffff;
+            --text-secondary: #a3a3a3;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--dark);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--dark-card);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            height: 32px;
+        }
+
+        .config-section {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .webhook-input {
+            padding: 0.5rem 1rem;
+            background: var(--dark);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            border-radius: 6px;
+            width: 400px;
+            font-size: 0.875rem;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--dark);
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.connected {
+            background: #4ade80;
+        }
+
+        .status-dot.error {
+            background: #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Chat container */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .messages-container {
+            flex: 1;
+            background: var(--dark-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message.assistant {
+            text-align: left;
+        }
+
+        .message-content {
+            display: inline-block;
+            max-width: 70%;
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: var(--primary);
+            color: white;
+        }
+
+        .message.assistant .message-content {
+            background: #1a1a1a;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+        }
+
+        /* Loading indicator */
+        .loading {
+            display: none;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .loading-dots {
+            display: inline-block;
+        }
+
+        .loading-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .loading-dots span:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .loading-dots span:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes bounce {
+            0%, 80%, 100% { 
+                transform: scale(0);
+            } 40% { 
+                transform: scale(1.0);
+            }
+        }
+
+        /* Input area */
+        .input-container {
+            background: var(--dark-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .input-field {
+            flex: 1;
+            background: var(--dark);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.9375rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-field:focus {
+            border-color: var(--primary);
+        }
+
+        .send-button {
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .send-button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Quick prompts */
+        .quick-prompts {
+            padding: 1rem 0;
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .quick-prompt {
+            padding: 0.5rem 1rem;
+            background: var(--dark-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-prompt:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* Response formatting */
+        .message-content h1, 
+        .message-content h2, 
+        .message-content h3 {
+            margin: 1rem 0 0.5rem 0;
+            color: var(--primary);
+        }
+
+        .message-content ul, 
+        .message-content ol {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .message-content li {
+            margin: 0.25rem 0;
+        }
+
+        .message-content code {
+            background: var(--dark);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content pre {
+            background: var(--dark);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+        }
+
+        .message-content strong {
+            color: var(--primary);
+        }
+
+        /* Error message */
+        .error-message {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        /* Welcome message */
+        .welcome-message {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+
+        .welcome-message h2 {
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" 
+             alt="Drivenmetrics" class="logo">
+        
+        <div class="config-section">
+            <input type="text" 
+                   id="webhookUrl" 
+                   class="webhook-input" 
+                   placeholder="Inserisci il webhook URL di n8n..."
+                   value="">
+            
+            <div class="status-indicator">
+                <div class="status-dot connected" id="statusDot"></div>
+                <span id="statusText">Pronto</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="messages-container" id="messagesContainer">
+            <div class="welcome-message">
+                <h2>👋 Benvenuto nella Chat Webhook</h2>
+                <p>Inserisci il tuo webhook URL di n8n nella barra in alto per iniziare.</p>
+                <p style="margin-top: 1rem; font-size: 0.875rem;">
+                    Questa chat invia i tuoi messaggi direttamente a un webhook n8n<br>
+                    e mostra la risposta che ricevi dal workflow.
+                </p>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <p style="margin-top: 0.5rem; color: var(--text-secondary);">Elaborazione in corso...</p>
+        </div>
+
+        <div class="quick-prompts">
+            <div class="quick-prompt" onclick="sendQuickPrompt('Analizza il mercato delle scarpe sportive')">
+                👟 Analisi mercato scarpe
+            </div>
+            <div class="quick-prompt" onclick="sendQuickPrompt('Mostra i competitor di Nike')">
+                🏆 Competitor Nike
+            </div>
+            <div class="quick-prompt" onclick="sendQuickPrompt('Trend marketing 2025')">
+                📈 Trend marketing
+            </div>
+            <div class="quick-prompt" onclick="sendQuickPrompt('Cerca annunci Facebook del settore moda')">
+                👗 Ads moda
+            </div>
+            <div class="quick-prompt" onclick="sendQuickPrompt('Test webhook connection')">
+                🧪 Test connessione
+            </div>
+        </div>
+
+        <div class="input-container">
+            <input type="text" 
+                   id="messageInput" 
+                   class="input-field" 
+                   placeholder="Scrivi il tuo messaggio..."
+                   onkeypress="handleKeyPress(event)">
+            
+            <button class="send-button" id="sendButton" onclick="sendMessage()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/>
+                </svg>
+                Invia
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let webhookUrl = localStorage.getItem('webhookUrl') || '';
+        const webhookInput = document.getElementById('webhookUrl');
+        
+        // Load saved webhook URL
+        if (webhookUrl) {
+            webhookInput.value = webhookUrl;
+        }
+
+        // Save webhook URL when changed
+        webhookInput.addEventListener('change', (e) => {
+            webhookUrl = e.target.value.trim();
+            localStorage.setItem('webhookUrl', webhookUrl);
+            updateStatus('connected', 'Webhook configurato');
+        });
+
+        // Format timestamp
+        function formatTime(date) {
+            return date.toLocaleTimeString('it-IT', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+
+        // Update status indicator
+        function updateStatus(type, text) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            statusDot.className = 'status-dot ' + type;
+            statusText.textContent = text;
+        }
+
+        // Add message to chat
+        function addMessage(role, content) {
+            const container = document.getElementById('messagesContainer');
+            
+            // Remove welcome message if exists
+            const welcome = container.querySelector('.welcome-message');
+            if (welcome) welcome.remove();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // Parse content if it's from assistant
+            if (role === 'assistant') {
+                contentDiv.innerHTML = formatContent(content);
+            } else {
+                contentDiv.textContent = content;
+            }
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = formatTime(new Date());
+            
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            container.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Format content (basic markdown support)
+        function formatContent(text) {
+            if (!text) return '';
+            
+            // Escape HTML first
+            text = text.replace(/&/g, '&amp;')
+                      .replace(/</g, '&lt;')
+                      .replace(/>/g, '&gt;');
+            
+            // Then apply formatting
+            text = text
+                // Headers
+                .replace(/^### (.*?)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+                // Bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Italic
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Code blocks
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                // Inline code
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // Lists
+                .replace(/^\* (.*?)$/gm, '<li>$1</li>')
+                .replace(/^- (.*?)$/gm, '<li>$1</li>')
+                // Line breaks
+                .replace(/\n/g, '<br>');
+            
+            // Wrap consecutive li elements in ul
+            text = text.replace(/(<li>.*?<\/li>(<br>)?)+/g, (match) => {
+                return '<ul>' + match.replace(/<br>/g, '') + '</ul>';
+            });
+            
+            return text;
+        }
+
+        // Show/hide loading
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            if (show) {
+                loading.classList.add('show');
+            } else {
+                loading.classList.remove('show');
+            }
+        }
+
+        // Handle enter key
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // Send quick prompt
+        function sendQuickPrompt(prompt) {
+            document.getElementById('messageInput').value = prompt;
+            sendMessage();
+        }
+
+        // Send message to webhook
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Check webhook URL
+            if (!webhookUrl) {
+                addMessage('assistant', '⚠️ Per favore configura il webhook URL nella barra in alto.');
+                return;
+            }
+            
+            // Add user message
+            addMessage('user', message);
+            
+            // Clear input and disable send
+            input.value = '';
+            sendButton.disabled = true;
+            
+            // Show loading
+            showLoading(true);
+            updateStatus('connected', 'Invio in corso...');
+            
+            try {
+                // Prepare payload for n8n
+                const payload = {
+                    message: message,
+                    timestamp: new Date().toISOString(),
+                    sessionId: 'web-' + Date.now(),
+                    metadata: {
+                        source: 'webhook-chat',
+                        userAgent: navigator.userAgent,
+                        language: navigator.language
+                    }
+                };
+                
+                console.log('Sending to webhook:', webhookUrl);
+                console.log('Payload:', payload);
+                
+                // Send to webhook
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                // Get response data
+                const data = await response.text();
+                console.log('Response data:', data);
+                
+                // Try to parse as JSON first
+                let responseContent;
+                try {
+                    const jsonData = JSON.parse(data);
+                    // Extract content from various possible fields
+                    responseContent = 
+                        jsonData.output ||
+                        jsonData.response ||
+                        jsonData.message ||
+                        jsonData.text ||
+                        jsonData.answer ||
+                        jsonData.result ||
+                        JSON.stringify(jsonData, null, 2);
+                } catch {
+                    // If not JSON, use as plain text
+                    responseContent = data;
+                }
+                
+                // Add assistant response
+                addMessage('assistant', responseContent || 'Risposta ricevuta (vuota)');
+                updateStatus('connected', 'Pronto');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showLoading(false);
+                updateStatus('error', 'Errore');
+                
+                // Add error message
+                addMessage('assistant', `❌ Errore: ${error.message}\n\nVerifica che:\n1. Il webhook URL sia corretto\n2. Il workflow n8n sia attivo\n3. Il webhook sia configurato per accettare POST requests`);
+                
+            } finally {
+                showLoading(false);
+                sendButton.disabled = false;
+                input.focus();
+            }
+        }
+
+        // Test connection on load
+        window.addEventListener('load', () => {
+            if (webhookUrl) {
+                updateStatus('connected', 'Webhook configurato');
+            } else {
+                updateStatus('error', 'Configura webhook');
+            }
+            
+            // Focus input
+            document.getElementById('messageInput').focus();
+        });
+    </script>
+</body>
+</html>

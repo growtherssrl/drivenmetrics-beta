@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DrivenMetrics - Claude AI Marketing Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0066ff;
+            --primary-dark: #0052cc;
+            --claude: #cc7832;
+            --dark: #0a0a0a;
+            --dark-card: #141414;
+            --border: #262626;
+            --text-primary: #ffffff;
+            --text-secondary: #a3a3a3;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--dark);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: var(--dark-card);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo {
+            height: 32px;
+        }
+
+        .badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, var(--claude), var(--primary));
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--dark);
+            border-radius: 20px;
+            font-size: 0.75rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Chat container */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2rem;
+            gap: 2rem;
+        }
+
+        /* Messages area */
+        .messages-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages-container {
+            flex: 1;
+            background: var(--dark-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+        }
+
+        .message {
+            margin-bottom: 1.5rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+
+        .message.user .message-avatar {
+            background: var(--primary);
+        }
+
+        .message.assistant .message-avatar {
+            background: linear-gradient(135deg, var(--claude), var(--primary));
+        }
+
+        .message-meta {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message-role {
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .message-time {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .message-content {
+            margin-left: 44px;
+            padding: 0.75rem 1rem;
+            background: #1a1a1a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+        }
+
+        .message.user .message-content {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        /* Tool usage indicator */
+        .tool-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: var(--dark);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin: 0.5rem 0;
+        }
+
+        .tool-indicator.active {
+            border-color: var(--primary);
+            color: var(--primary);
+            animation: pulse 1s infinite;
+        }
+
+        /* Input area */
+        .input-container {
+            background: var(--dark-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .input-field {
+            flex: 1;
+            background: var(--dark);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.9375rem;
+            outline: none;
+            resize: none;
+            min-height: 44px;
+            max-height: 120px;
+            transition: border-color 0.2s;
+        }
+
+        .input-field:focus {
+            border-color: var(--primary);
+        }
+
+        .send-button {
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(135deg, var(--claude), var(--primary));
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .send-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 102, 255, 0.3);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Side panel */
+        .side-panel {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .panel-card {
+            background: var(--dark-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+        }
+
+        .panel-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+
+        /* Quick actions */
+        .quick-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .quick-action {
+            padding: 0.5rem 0.75rem;
+            background: var(--dark);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+        }
+
+        .quick-action:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+            transform: translateX(2px);
+        }
+
+        /* Tools status */
+        .tools-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        .tool-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--dark);
+            border-radius: 6px;
+        }
+
+        .tool-status {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #4ade80;
+        }
+
+        /* Loading */
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #1a1a1a;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-left: 44px;
+            width: fit-content;
+        }
+
+        .typing-indicator.show {
+            display: flex;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+            30% { transform: translateY(-10px); opacity: 1; }
+        }
+
+        /* Markdown formatting */
+        .message-content h1,
+        .message-content h2,
+        .message-content h3 {
+            margin: 1rem 0 0.5rem 0;
+            color: var(--primary);
+        }
+
+        .message-content ul,
+        .message-content ol {
+            margin: 0.5rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .message-content li {
+            margin: 0.25rem 0;
+        }
+
+        .message-content code {
+            background: var(--dark);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .message-content pre {
+            background: var(--dark);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 0.5rem 0;
+        }
+
+        .message-content strong {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .message-content blockquote {
+            border-left: 3px solid var(--primary);
+            padding-left: 1rem;
+            margin: 0.5rem 0;
+            color: var(--text-secondary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .chat-container {
+                flex-direction: column;
+                padding: 1rem;
+            }
+            
+            .side-panel {
+                width: 100%;
+                order: -1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <img src="https://app.drivenmetrics.com/assets/images/logo/logo-text-on-dark-cropped.svg" 
+                 alt="Drivenmetrics" class="logo">
+            <div class="badge">
+                <span>🤖</span>
+                <span>Claude AI + MCP</span>
+            </div>
+        </div>
+        
+        <div class="status">
+            <div class="status-dot"></div>
+            <span>Connected to MCP Tools</span>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div class="messages-section">
+            <div class="messages-container" id="messagesContainer">
+                <!-- Welcome message -->
+                <div class="message assistant">
+                    <div class="message-header">
+                        <div class="message-avatar">🤖</div>
+                        <div class="message-meta">
+                            <span class="message-role">Claude Assistant</span>
+                            <span class="message-time">Ora</span>
+                        </div>
+                    </div>
+                    <div class="message-content">
+                        Ciao! Sono il tuo assistente di marketing intelligence potenziato da Claude AI e integrato con gli strumenti MCP per l'analisi di Facebook Ads.
+                        
+                        Posso aiutarti a:
+                        • 🔍 Cercare e analizzare annunci Facebook
+                        • 🏆 Studiare le strategie dei competitor
+                        • 📊 Fornire insights di mercato basati su dati reali
+                        • 🎨 Analizzare creatività e messaggi pubblicitari
+                        
+                        Cosa vuoi analizzare oggi?
+                    </div>
+                </div>
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="messageInput" 
+                        class="input-field" 
+                        placeholder="Chiedi qualcosa su marketing, competitor, Facebook ads..."
+                        rows="1"></textarea>
+                    
+                    <button class="send-button" id="sendButton" onclick="sendMessage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/>
+                        </svg>
+                        Invia
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="side-panel">
+            <div class="panel-card">
+                <div class="panel-title">🚀 Azioni Rapide</div>
+                <div class="quick-actions">
+                    <button class="quick-action" onclick="sendQuickPrompt('Analizza gli annunci di Nike degli ultimi 30 giorni')">
+                        👟 Analisi Nike
+                    </button>
+                    <button class="quick-action" onclick="sendQuickPrompt('Quali sono i trend del marketing digitale nel settore moda?')">
+                        👗 Trend Moda
+                    </button>
+                    <button class="quick-action" onclick="sendQuickPrompt('Confronta le strategie pubblicitarie di Apple e Samsung')">
+                        📱 Apple vs Samsung
+                    </button>
+                    <button class="quick-action" onclick="sendQuickPrompt('Cerca annunci di e-commerce in Italia')">
+                        🛒 E-commerce Italia
+                    </button>
+                    <button class="quick-action" onclick="sendQuickPrompt('Analizza le creatività più performanti del settore fitness')">
+                        💪 Fitness Ads
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel-card">
+                <div class="panel-title">🔧 MCP Tools Disponibili</div>
+                <div class="tools-list">
+                    <div class="tool-item">
+                        <div class="tool-status"></div>
+                        <span>Search Ads by Terms</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-status"></div>
+                        <span>Search Ads by Page</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-status"></div>
+                        <span>Analyze Competitors</span>
+                    </div>
+                    <div class="tool-item">
+                        <div class="tool-status"></div>
+                        <span>Get Ad Creative</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-card">
+                <div class="panel-title">ℹ️ Info</div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                    Powered by Claude 3.5 Sonnet con accesso diretto agli MCP tools per analisi real-time di Facebook Ads.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chat state
+        let conversationHistory = [];
+        let isProcessing = false;
+
+        // Auto-resize textarea
+        const messageInput = document.getElementById('messageInput');
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Handle enter key
+        messageInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Format time
+        function formatTime(date) {
+            return date.toLocaleTimeString('it-IT', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+
+        // Format markdown content
+        function formatMarkdown(text) {
+            if (!text) return '';
+            
+            // Basic markdown to HTML
+            let formatted = text
+                // Headers
+                .replace(/^### (.*?)$/gm, '<h3>$1</h3>')
+                .replace(/^## (.*?)$/gm, '<h2>$1</h2>')
+                .replace(/^# (.*?)$/gm, '<h1>$1</h1>')
+                // Bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Italic
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Code blocks
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                // Inline code
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // Lists
+                .replace(/^\* (.*?)$/gm, '<li>$1</li>')
+                .replace(/^- (.*?)$/gm, '<li>$1</li>')
+                // Blockquotes
+                .replace(/^> (.*?)$/gm, '<blockquote>$1</blockquote>')
+                // Line breaks
+                .replace(/\n\n/g, '</p><p>')
+                .replace(/\n/g, '<br>');
+            
+            // Wrap consecutive li elements in ul
+            formatted = formatted.replace(/(<li>.*?<\/li>(<br>)?)+/g, (match) => {
+                return '<ul>' + match.replace(/<br>/g, '') + '</ul>';
+            });
+            
+            // Wrap in paragraph if needed
+            if (!formatted.startsWith('<')) {
+                formatted = '<p>' + formatted + '</p>';
+            }
+            
+            return formatted;
+        }
+
+        // Add message to chat
+        function addMessage(role, content, toolsUsed = []) {
+            const container = document.getElementById('messagesContainer');
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'message-header';
+            
+            const avatarDiv = document.createElement('div');
+            avatarDiv.className = 'message-avatar';
+            avatarDiv.textContent = role === 'user' ? '👤' : '🤖';
+            
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'message-meta';
+            
+            const roleSpan = document.createElement('span');
+            roleSpan.className = 'message-role';
+            roleSpan.textContent = role === 'user' ? 'Tu' : 'Claude Assistant';
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'message-time';
+            timeSpan.textContent = formatTime(new Date());
+            
+            metaDiv.appendChild(roleSpan);
+            metaDiv.appendChild(timeSpan);
+            
+            headerDiv.appendChild(avatarDiv);
+            headerDiv.appendChild(metaDiv);
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            if (role === 'assistant') {
+                contentDiv.innerHTML = formatMarkdown(content);
+                
+                // Add tools indicator if any were used
+                if (toolsUsed.length > 0) {
+                    const toolDiv = document.createElement('div');
+                    toolDiv.className = 'tool-indicator';
+                    toolDiv.innerHTML = `🔧 Tools utilizzati: ${toolsUsed.join(', ')}`;
+                    messageDiv.appendChild(toolDiv);
+                }
+            } else {
+                contentDiv.textContent = content;
+            }
+            
+            messageDiv.appendChild(headerDiv);
+            messageDiv.appendChild(contentDiv);
+            
+            container.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Show/hide typing indicator
+        function showTyping(show) {
+            const indicator = document.getElementById('typingIndicator');
+            if (show) {
+                indicator.classList.add('show');
+            } else {
+                indicator.classList.remove('show');
+            }
+        }
+
+        // Send quick prompt
+        function sendQuickPrompt(prompt) {
+            document.getElementById('messageInput').value = prompt;
+            sendMessage();
+        }
+
+        // Send message to Claude + MCP
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            const message = input.value.trim();
+            
+            if (!message || isProcessing) return;
+            
+            // Add user message
+            addMessage('user', message);
+            conversationHistory.push({ role: 'user', content: message });
+            
+            // Clear input and disable
+            input.value = '';
+            input.style.height = 'auto';
+            sendButton.disabled = true;
+            isProcessing = true;
+            
+            // Show typing
+            showTyping(true);
+            
+            try {
+                // Call Claude + MCP endpoint
+                const response = await fetch('/api/claude/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        history: conversationHistory.slice(-10) // Keep last 10 messages for context
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Add Claude's response
+                    addMessage('assistant', data.response, data.toolsUsed || []);
+                    conversationHistory.push({ 
+                        role: 'assistant', 
+                        content: data.response 
+                    });
+                } else {
+                    throw new Error(data.error || 'Unknown error');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showTyping(false);
+                
+                addMessage('assistant', `❌ Errore: ${error.message}\n\nVerifica che:\n1. Il server sia configurato con ANTHROPIC_API_KEY\n2. L'API key sia valida\n3. Il server sia in esecuzione`);
+                
+            } finally {
+                showTyping(false);
+                sendButton.disabled = false;
+                isProcessing = false;
+                input.focus();
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            messageInput.focus();
+        });
+    </script>
+</body>
+</html>

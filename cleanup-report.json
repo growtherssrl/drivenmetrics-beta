@@ -1,0 +1,23 @@
+{
+  "timestamp": "2025-09-02T09:54:19.593Z",
+  "mode": "EXECUTED",
+  "stats": {
+    "filesRemoved": 10,
+    "spaceFreed": "54.89 KB",
+    "directoriesCleaned": 1,
+    "categories": {
+      "tests": {
+        "removed": 8,
+        "savedSpace": 49020
+      },
+      "logs": {
+        "removed": 2,
+        "savedSpace": 7183
+      },
+      "temp": {
+        "removed": 0,
+        "savedSpace": 0
+      }
+    }
+  }
+}
