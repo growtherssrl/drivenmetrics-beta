@@ -2216,15 +2216,22 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
       return res.redirect("/login?error=No%20email%20permission%20from%20Facebook");
     }
     
-    // Get the logged-in user from the session
-    const sessionId = req.cookies?.session_id;
-    if (!sessionId || !sessions.has(sessionId)) {
-      console.error("No valid session found for Facebook callback");
+    // Get the logged-in user from the OAuth state (not from cookie, as it might not be sent in redirects)
+    if (!state || typeof state !== 'string') {
+      console.error("No state parameter in Facebook callback");
+      return res.redirect("/login?error=Invalid%20OAuth%20state");
+    }
+
+    const oauthState = oauthStates.get(state);
+    if (!oauthState) {
+      console.error("OAuth state not found or expired:", state);
       return res.redirect("/login?error=Session%20expired");
     }
-    
-    const session = sessions.get(sessionId);
-    const userId = session.user_id;
+
+    // Clean up the state after use
+    oauthStates.delete(state);
+
+    const userId = oauthState.user_id;
     console.log("Facebook callback for existing user:", userId);
     
     // Update user's Facebook info in database
