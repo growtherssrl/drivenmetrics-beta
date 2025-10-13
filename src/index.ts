@@ -1218,7 +1218,12 @@ app.get("/mcp-api/sse", async (req, res) => {
   // Extract auth token
   const authHeader = req.headers.authorization;
   let userId: string | null = null;
-  
+
+  // DEBUG: Log the actual auth header
+  console.log("[SSE] Raw auth header:", authHeader ? `"${authHeader.substring(0, 50)}..."` : "null");
+  console.log("[SSE] Auth header type:", typeof authHeader);
+  console.log("[SSE] Starts with Bearer?", authHeader?.startsWith("Bearer "));
+
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
     console.log("[SSE] Bearer token provided:", token.substring(0, 10) + "...");
