@@ -1219,10 +1219,19 @@ app.get("/mcp-api/sse", async (req, res) => {
   const authHeader = req.headers.authorization;
   let userId: string | null = null;
 
-  // DEBUG: Log the actual auth header
-  console.log("[SSE] Raw auth header:", authHeader ? `"${authHeader.substring(0, 50)}..."` : "null");
-  console.log("[SSE] Auth header type:", typeof authHeader);
-  console.log("[SSE] Starts with Bearer?", authHeader?.startsWith("Bearer "));
+  // DEBUG: Log ALL possible auth header variations
+  console.log("[SSE] req.headers.authorization:", req.headers.authorization);
+  console.log("[SSE] req.headers['authorization']:", req.headers['authorization']);
+  console.log("[SSE] req.headers.Authorization:", (req.headers as any).Authorization);
+  console.log("[SSE] All headers keys:", Object.keys(req.headers));
+  console.log("[SSE] authHeader value:", authHeader);
+  console.log("[SSE] authHeader type:", typeof authHeader);
+  console.log("[SSE] authHeader truthy?", !!authHeader);
+  if (authHeader) {
+    console.log("[SSE] authHeader length:", authHeader.length);
+    console.log("[SSE] authHeader first 50 chars:", authHeader.substring(0, 50));
+    console.log("[SSE] Starts with 'Bearer '?", authHeader.startsWith("Bearer "));
+  }
 
   if (authHeader && authHeader.startsWith("Bearer ")) {
     const token = authHeader.slice(7);
