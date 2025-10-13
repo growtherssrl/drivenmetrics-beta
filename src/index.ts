@@ -2240,7 +2240,7 @@ app.get("/api/authorise/facebook/callback", async (req, res) => {
         .from("users")
         .update({
           facebook_id: fbUser.id,
-          name: fbUser.name || session.name, // Keep existing name if Facebook doesn't provide one
+          name: fbUser.name, // Use name from Facebook
           updated_at: new Date().toISOString()
         })
         .eq("user_id", userId);
